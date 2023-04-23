@@ -127,7 +127,7 @@ function Base.getindex(d::Digits, i::Int)::Bool
     isodd(d.x >> (i-1))
 end
 
-@noinline function add_along_axis!(f::F, out, dim, window, neutral_element, workspace_vector) where {F}
+@noinline function add_along_axis!(f::F, out, inp, dim, window, neutral_element, workspace_vector) where {F}
     winaxis = window[dim]
     lo = first(winaxis)
     hi = last(winaxis)
@@ -136,6 +136,9 @@ end
     offset_inner = lo 
     offset_first = 0
     for iloglen in 1:32
+        if 2^(iloglen) > 2*length(winaxis)
+            break
+        end
         if digits_inner[iloglen]
             istart = first_inner_index_axis(axes(out,dim), winaxis)
             istop = lastindex(out, dim)
@@ -153,11 +156,7 @@ end
             op_along_axis2!(f, out, arg2, dim, offset_first, CartesianIndices(inds))
             offset_first += 2^(iloglen-1)
         end
-        if 2^(iloglen-1) > size(out, dim)
-            break
-        end
     end
-    inp = first(workspace_vector)
     add_along_axis_prefix!(f, out, inp, dim, window, neutral_element)
     return out
 end
@@ -183,7 +182,7 @@ function reduce_window(f::F, arr, window; neutral_element=get_neutral_element(f,
     for dim in 1:ndims(arr)
         populate_workspace_along_axis!(f, inp, dim, win, neutral_element, workspace_vector)
         fill!(out, neutral_element)
-        add_along_axis!(f, out, dim, win, neutral_element, workspace_vector)
+        add_along_axis!(f, out, inp, dim, win, neutral_element, workspace_vector)
         (inp, out) = (out, inp)
     end
     (inp, out) = (out, inp)
