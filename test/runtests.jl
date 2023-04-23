@@ -1,4 +1,5 @@
 using ReduceWindows: reduce_window, reduce_window_naive
+using ReduceWindows: fastmin, fastmax
 using Test
 using Random: Xoshiro
 
@@ -88,6 +89,7 @@ end
         end
         siz = rand(rng, 0:5, nd)
         arr = randn(rng, siz...)
+        op = rand(rng, [+, min, max, fastmin, fastmax])
         @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
     end
 end
