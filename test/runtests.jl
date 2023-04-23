@@ -16,6 +16,9 @@ using Random: Xoshiro
 # end
 
 @testset "1d explicit" begin
+    @test reduce_window(+, 1:4, (-2:1,)) == [3, 6, 10, 9]
+    @test reduce_window_naive(+, 1:4, (-2:1,)) == [3, 6, 10, 9]
+
     @test reduce_window(+, [1], (-1:0,)) == [1]
     @test reduce_window_naive(+, [1], (-1:0,)) == [1]
 
@@ -25,8 +28,6 @@ using Random: Xoshiro
     @test reduce_window(+, Float64[], (-2:1,)) == Float64[]
     @test reduce_window_naive(+, Float64[], (-2:1,)) == Float64[]
 
-    @test reduce_window(+, 1:4, (-2:1,)) == [3, 6, 10, 9]
-    @test reduce_window_naive(+, 1:4, (-2:1,)) == [3, 6, 10, 9]
 
     @test reduce_window(+, [1,3,4], (0:0,)) ≈ [1,3,4]
     @test reduce_window_naive(+, [1,3,4], (0:0,)) ≈ [1,3,4]
