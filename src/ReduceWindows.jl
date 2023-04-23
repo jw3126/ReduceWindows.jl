@@ -9,7 +9,7 @@ end
 function fastmin(x,y)
     ifelse(x < y, x, y)
 end
-function apply_offset(I::CartesianIndex, dim, offset)
+Base.@propagate_inbounds function apply_offset(I::CartesianIndex, dim, offset)
     t = Tuple(I)
     t2 = Base.setindex(t, t[dim]+offset, dim)
     CartesianIndex(t2)
@@ -26,7 +26,7 @@ end
 
 function op_along_axis2!(f::F, out, arg2, dim, offset, inds::CartesianIndices) where {F}
     @assert axes(out) == axes(arg2)
-    for I1 in inds
+    @inbounds @simd for I1 in inds
         I2 = apply_offset(I1, dim, offset)
         x1 = out[I1]
         x2 = arg2[I2]
@@ -65,14 +65,14 @@ function add_along_axis_prefix!(f::F, out, inp, dim, window, neutral_element)::t
     CI = CartesianIndices(inds)
     CI1, CI2 = split_indices_dim_istop(CI, dim, istop)
     @check length(CI1) + length(CI2) == length(CI)
-    for I in CI1
+    @inbounds @simd for I in CI1
         I1 = apply_offset(I, dim, -1)
         x1 = out[I1]::T
         I2 = apply_offset(I, dim, hi)
         x2 = inp[I2]
         out[I] = f(x1, x2)
     end
-    for I in CI2
+    @inbounds @simd for I in CI2
         I1 = apply_offset(I, dim, -1)
         x1 = out[I1]::T
         out[I] = x1
@@ -124,13 +124,13 @@ end
 
 function power_stride!(f, out, inp, dim, offset, neutral_element)
     ci1, ci2 = split_indices_dim_offset(CartesianIndices(axes_unitrange(out)), dim, offset)
-    for I in ci1
+    @inbounds @simd for I in ci1
         I2 = apply_offset(I, dim, offset)
         x1 = inp[I]
         x2 = inp[I2]
         out[I] = f(x1, x2)
     end
-    for I in ci2
+    @inbounds @simd for I in ci2
         x1 = inp[I]
         out[I] = x1
     end
