@@ -161,14 +161,17 @@ function resolve_window(array_axes, window)
 end
 
 function reduce_window(f, arr, window; neutral_element=get_neutral_element(f, eltype(arr)))
-    @argcheck ndims(arr) == 1
     window = resolve_window(axes(arr), window)
     workspace_vector = alloc_workspace_vector(arr, window)
-    out = fill!(similar(arr), neutral_element)
+    out = similar(arr)
+    inp = copy!(similar(arr), arr)
     for dim in 1:ndims(arr)
-        populate_workspace_along_axis!(f, arr, dim, window, neutral_element, workspace_vector)
+        populate_workspace_along_axis!(f, inp, dim, window, neutral_element, workspace_vector)
+        fill!(out, neutral_element)
         add_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
+        (inp, out) = (out, inp)
     end
+    (inp, out) = (out, inp)
     return out
 end
 

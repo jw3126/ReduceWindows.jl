@@ -26,5 +26,19 @@ using Random: Xoshiro
 end
 
 @testset "2d explicit" begin
+    @test reduce_window(+, [1 2; 3 4], (0:0,0:0)) == [1 2; 3 4]
+    @test reduce_window_naive(+, [1 2; 3 4], (0:0,0:0)) == [1 2; 3 4]
+
+    @test reduce_window(+, [1 2; 3 4], (0:1,0:0)) == [4 6; 3 4]
+    @test reduce_window_naive(+, [1 2; 3 4], (0:1,0:0)) == [4 6; 3 4]
+
+    @test reduce_window(+, [1 2; 3 4], (0:0,0:1)) == [3 2; 7 4]
+    @test reduce_window_naive(+, [1 2; 3 4], (0:0,0:1)) == [3 2; 7 4]
+
+    @test reduce_window(+, [1 2; 3 4], (0:1,0:1)) == [10 6; 7 4]
+    @test reduce_window_naive(+, [1 2; 3 4], (0:1,0:1)) == [10 6; 7 4]
+
+    @test reduce_window(+, [1 2; 3 4], (-10:11,-12:13)) == [10 10; 10 10]
+    @test reduce_window_naive(+, [1 2; 3 4], (-10:11,-12:13)) == [10 10; 10 10]
 
 end
