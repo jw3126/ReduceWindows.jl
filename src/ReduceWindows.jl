@@ -60,20 +60,22 @@ function add_along_axis_prefix!(f::F, out, inp, dim, window, neutral_element)::t
     inds = Base.setindex(inds, istart:istop, dim)
 
     T = eltype(out)
-    CI1, CI2 = split_indices_dim_offset(CartesianIndices(inds), dim, hi)
+    offset = hi
+    istop = lastindex(out, dim) - hi
+    CI = CartesianIndices(inds)
+    CI1, CI2 = split_indices_dim_istop(CI, dim, istop)
+    @check length(CI1) + length(CI2) == length(CI)
     for I in CI1
         I1 = apply_offset(I, dim, -1)
         x1 = out[I1]::T
         I2 = apply_offset(I, dim, hi)
-        x2 = get(inp, I2, neutral_element)::T # TODO SIMD
+        x2 = inp[I2]
         out[I] = f(x1, x2)
     end
     for I in CI2
         I1 = apply_offset(I, dim, -1)
         x1 = out[I1]::T
-        I2 = apply_offset(I, dim, hi)
-        x2 = get(inp, I2, neutral_element)::T # TODO SIMD
-        out[I] = f(x1, x2)
+        out[I] = x1
     end
     return out
 end
@@ -98,19 +100,26 @@ function Base.getindex(d::Digits, i::Int)::Bool
     isodd(d.x >> (i-1))
 end
 
-function split_indices_dim_offset(CI::CartesianIndices, dim, offset)
+function split_indices_dim_istop(CI::CartesianIndices, dim, istop)
     inds = CI.indices
     ax = inds[dim]
-    istop = last(ax)-offset
+    istop = min(istop, last(ax))
     ax1 = first(ax):istop
     istart = max(istop+1, first(ax))
     ax2 = istart:last(ax)
-    @assert length(ax1) + length(ax2) == length(ax)
+    @assert length(ax) == length(ax1) + length(ax2)
     inds1 = Base.setindex(inds, ax1, dim)
     inds2 = Base.setindex(inds, ax2, dim)
     CI1 = CartesianIndices(inds1)
     CI2 = CartesianIndices(inds2)
     return CI1, CI2
+end
+
+function split_indices_dim_offset(CI::CartesianIndices, dim, offset)
+    inds = CI.indices
+    ax = inds[dim]
+    istop = last(ax)-offset
+    split_indices_dim_istop(CI, dim, istop)
 end
 
 function power_stride!(f, out, inp, dim, offset, neutral_element)
