@@ -63,7 +63,6 @@ end
 
 function op_along_axis2(f::F, out, arg2, dim, offset, inds::CartesianIndices) where {F}
     @assert axes(out) == axes(arg2)
-    # TODO end
     for I1 in inds
         I2 = apply_offset(I1, dim, offset)
         x1 = out[I1]
@@ -100,7 +99,7 @@ function first_inner_index_axis(outaxis::AbstractUnitRange, winaxis::AbstractUni
     first(outaxis) - first(winaxis)
 end
 
-function axes_unitrange(arr)
+function axes_unitrange(arr::AbstractArray{T,N})::NTuple{N,UnitRange{Int}} where {N,T}
     map(UnitRange{Int}, axes(arr))
 end
 
@@ -116,7 +115,7 @@ function add_along_axis_prefix!(f::F, out, dim, window, neutral_element, workspa
     inds = axes_unitrange(out)
     ifirst = firstindex(out, dim)
     ilast = lastindex(out, dim)
-    istart = min(ifirst + 1, ilast)
+    istart = ifirst + 1
     istop = first_inner_index_axis(axes(out,dim), winaxis)-1
     istop = clamp(istop, ifirst, ilast)
     inds = Base.setindex(inds, istart:istop, dim)
@@ -144,7 +143,7 @@ end
         if Bool(dig)
             istop = lastindex(out, dim)
             istop = min(istop, istop-offset)
-            inds = Base.setindex(axes(out), istart:istop, dim)
+            inds = Base.setindex(axes_unitrange(out), istart:istop, dim)
             arg2 = workspace_vector[iloglen]
             op_along_axis2(f, out, arg2, dim, offset, CartesianIndices(inds))
             offset += 2^(iloglen-1)
