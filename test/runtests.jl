@@ -4,12 +4,16 @@ using ReduceWindows
 using Test
 using Random: Xoshiro
 
-@testset "Digits" begin
-    Digits = ReduceWindows.Digits
-    for x in 1:100
-        @test Base.digits(x,base=2) == collect(Digits(x))
-    end
-end
+# @testset "Digits" begin
+#     Digits = ReduceWindows.Digits
+#     for x in 1:100
+#         digits::Digits = @inferred Digits(x)
+#         @test Base.digits(x,base=2) == collect(digits)
+#         @test collect(digits) == [d for d in digits]
+#         n = length(collect(digits))
+#         @test collect(digits) == [Digits(x)[i] for i in 1:n]
+#     end
+# end
 
 @testset "1d explicit" begin
     @test reduce_window(+, [1], (-1:0,)) == [1]

@@ -61,7 +61,7 @@ end
     return workspace_vector
 end
 
-function op_along_axis2(f::F, out, arg2, dim, offset, inds::CartesianIndices) where {F}
+function op_along_axis2!(f::F, out, arg2, dim, offset, inds::CartesianIndices) where {F}
     @assert axes(out) == axes(arg2)
     for I1 in inds
         I2 = apply_offset(I1, dim, offset)
@@ -76,10 +76,10 @@ function add_along_axis_first!(f::F, out, dim, window, neutral_element, workspac
     # make sure the first element of out along axis is correct
     winaxis = window[dim]
     lo = first(winaxis)
+    if lo >= 0
+        return out
+    end
     @assert lo <= 0
-    inds = axes_unitrange(out)
-    i0 = first(inds[dim])
-    inds = Base.setindex(inds, i0:i0, dim)
     hi = last(winaxis)
     @assert hi >= 0
     digits = Digits(hi+1)
@@ -87,8 +87,11 @@ function add_along_axis_first!(f::F, out, dim, window, neutral_element, workspac
     for (iloglen,dig) in enumerate(digits)
         @assert dig in 0:1
         if Bool(dig)
+            inds = axes_unitrange(out)
+            i0 = first(inds[dim])
+            inds = Base.setindex(inds, i0:i0, dim)
             arg2 = workspace_vector[iloglen]
-            op_along_axis2(f, out, arg2, dim, offset, CartesianIndices(inds))
+            op_along_axis2!(f, out, arg2, dim, offset, CartesianIndices(inds))
             offset += 2^(iloglen-1)
         end
     end
@@ -111,7 +114,6 @@ function add_along_axis_prefix!(f::F, out, dim, window, neutral_element, workspa
     if lo >= 0
         return out
     end
-    add_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
     inds = axes_unitrange(out)
     ifirst = firstindex(out, dim)
     ilast = lastindex(out, dim)
@@ -145,27 +147,50 @@ function Base.iterate(d::Digits, state=d.x)
         (item, state)
     end
 end
-function Base.IteratorSize(::Type{Digits})
-    Base.SizeUnknown() # TODO add length
+function Base.length(d::Digits)
+    8*sizeof(d.x)
+end
+function Base.getindex(d::Digits, i::Int)::Bool
+    isodd(d.x >> (i-1))
 end
 
 @noinline function add_along_axis!(f::F, out, dim, window, neutral_element, workspace_vector) where {F}
-    add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
     winaxis = window[dim]
-    istart = first_inner_index_axis(axes(out,dim), winaxis)
-    digits = Digits(length(winaxis))
-    offset = first(winaxis)
-    for (iloglen,dig) in enumerate(digits)
-        @assert dig in 0:1
-        if Bool(dig)
+    lo = first(winaxis)
+    hi = last(winaxis)
+    digits_inner = Digits(length(winaxis))
+    digits_first  = Digits(hi+1) 
+    digits_first = if lo >= 0
+        Digits(hi+1) 
+    else
+        0
+    end
+    offset_inner = lo 
+    offset_first = 0#lo
+    add_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
+    for iloglen in 1:32
+        if digits_inner[iloglen]
+            istart = first_inner_index_axis(axes(out,dim), winaxis)
             istop = lastindex(out, dim)
-            istop = min(istop, istop-offset)
+            istop = min(istop, istop-offset_inner)
             inds = Base.setindex(axes_unitrange(out), istart:istop, dim)
             arg2 = workspace_vector[iloglen]
-            op_along_axis2(f, out, arg2, dim, offset, CartesianIndices(inds))
-            offset += 2^(iloglen-1)
+            op_along_axis2!(f, out, arg2, dim, offset_inner, CartesianIndices(inds))
+            offset_inner += 2^(iloglen-1)
         end
+        # if (lo > 0) && digits_first[iloglen]
+        #     inds = axes_unitrange(out)
+        #     i0 = first(inds[dim])
+        #     inds = Base.setindex(inds, i0:i0, dim)
+        #     arg2 = workspace_vector[iloglen]
+        #     op_along_axis2!(f, out, arg2, dim, offset_first, CartesianIndices(inds))
+        #     offset_first += 2^(iloglen-1)
+        # end
+        # if offset > size(out, dim)
+        #     break
+        # end
     end
+    add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
     return out
 end
 
