@@ -139,12 +139,12 @@ end
         if 2^(iloglen) > 2*length(winaxis)
             break
         end
+        arg2 = workspace_vector[iloglen]
         if digits_inner[iloglen]
             istart = first_inner_index_axis(axes(out,dim), winaxis)
             istop = lastindex(out, dim)
             istop = min(istop, istop-offset_inner)
             inds = Base.setindex(axes_unitrange(out), istart:istop, dim)
-            arg2 = workspace_vector[iloglen]
             op_along_axis2!(f, out, arg2, dim, offset_inner, CartesianIndices(inds))
             offset_inner += 2^(iloglen-1)
         end
@@ -152,7 +152,6 @@ end
             inds = axes_unitrange(out)
             i0 = first(inds[dim])
             inds = Base.setindex(inds, i0:i0, dim)
-            arg2 = workspace_vector[iloglen]
             op_along_axis2!(f, out, arg2, dim, offset_first, CartesianIndices(inds))
             offset_first += 2^(iloglen-1)
         end
