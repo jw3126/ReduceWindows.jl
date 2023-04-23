@@ -82,7 +82,7 @@ function op_along_axis2(f, out, arg2, dim, offset, inds::CartesianIndices)
     return out
 end
 
-function assoc_assemble_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
+function add_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
     # make sure the first element of out along axis is correct
     winaxis = window[dim]
     lo = first(winaxis)
@@ -90,7 +90,6 @@ function assoc_assemble_along_axis_first!(f, out, dim, window, neutral_element, 
     inds = axes(out)
     i0 = first(inds[dim])
     inds = Base.setindex(inds, i0:i0, dim)
-    fill!(view(out, inds...), neutral_element)
     hi = last(winaxis)
     @assert hi >= 0
     digits = Base.digits(hi+1, base=2)
@@ -110,7 +109,7 @@ function first_inner_index_axis(outaxis::AbstractUnitRange, winaxis::AbstractUni
     first(outaxis) - first(winaxis)
 end
 
-function assoc_assemble_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
+function add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
     # make sure the front elements of out along axis is correct
     winaxis = window[dim]
     lo = first(winaxis)
@@ -118,7 +117,7 @@ function assoc_assemble_along_axis_prefix!(f, out, dim, window, neutral_element,
     if lo >= 0
         return out
     end
-    assoc_assemble_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
+    add_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
     inds = axes(out)
     ifirst = firstindex(out, dim)
     ilast = lastindex(out, dim)
@@ -138,9 +137,8 @@ function assoc_assemble_along_axis_prefix!(f, out, dim, window, neutral_element,
     return out
 end
 
-function assoc_assemble_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
-    fill!(out, neutral_element)
-    assoc_assemble_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
+function add_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
+    add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
     winaxis = window[dim]
     istart = first_inner_index_axis(axes(out,dim), winaxis)
     digits = Base.digits(length(winaxis), base=2)
@@ -179,7 +177,8 @@ function reduce_window(f, arr, window; neutral_element=get_neutral_element(f, el
     dim = 1
     populate_workspace_along_axis!(f, arr, dim, window, neutral_element, workspace_vector)
     out = similar(arr)
-    assoc_assemble_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
+    fill!(out, neutral_element)
+    add_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
     return out
 end
 
