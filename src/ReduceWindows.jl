@@ -60,7 +60,15 @@ function add_along_axis_prefix!(f::F, out, inp, dim, window, neutral_element)::t
     inds = Base.setindex(inds, istart:istop, dim)
 
     T = eltype(out)
-    for I in CartesianIndices(inds)
+    CI1, CI2 = split_indices_dim_offset(CartesianIndices(inds), dim, hi)
+    for I in CI1
+        I1 = apply_offset(I, dim, -1)
+        x1 = out[I1]::T
+        I2 = apply_offset(I, dim, hi)
+        x2 = get(inp, I2, neutral_element)::T # TODO SIMD
+        out[I] = f(x1, x2)
+    end
+    for I in CI2
         I1 = apply_offset(I, dim, -1)
         x1 = out[I1]::T
         I2 = apply_offset(I, dim, hi)
@@ -102,7 +110,7 @@ function split_indices_dim_offset(CI::CartesianIndices, dim, offset)
     inds2 = Base.setindex(inds, ax2, dim)
     CI1 = CartesianIndices(inds1)
     CI2 = CartesianIndices(inds2)
-    CI1, CI2
+    return CI1, CI2
 end
 
 function power_stride!(f, out, inp, dim, offset, neutral_element)
