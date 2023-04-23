@@ -2,37 +2,26 @@ using ReduceWindows: reduce_window, reduce_window_naive
 using Test
 using Random: Xoshiro
 
-f = +
-arr = 1:4
-window = (-2:1,)
-@test reduce_window(f, arr, window) ≈ reduce_window_naive(f, arr, window)
+@testset "1d explicit" begin
+    @test reduce_window(+, 1:4, (-2:1,)) == [3, 6, 10, 9]
+    @test reduce_window_naive(+, 1:4, (-2:1,)) == [3, 6, 10, 9]
 
-rng = Xoshiro(3)
+    @test reduce_window(+, [1,3,4], (0:0,)) ≈ [1,3,4]
+    @test reduce_window_naive(+, [1,3,4], (0:0,)) ≈ [1,3,4]
 
-f = +
-arr = 1:5
-window = (-0:0,)
-@test reduce_window(f, arr, window) ≈ arr
-@test reduce_window_naive(f, arr, window) ≈ arr
-@test reduce_window(f, arr, window) ≈ reduce_window_naive(f, arr, window)
+    @test reduce_window(+, [1,3,4], (-1:1,)) ≈ [4, 8, 7]
+    @test reduce_window_naive(+, [1,3,4], (-1:1,)) ≈ [4, 8, 7]
 
-f = +
-arr = randn(rng, 5)
-window = (-1:1,)
-@test reduce_window(f, arr, window) ≈ reduce_window_naive(f, arr, window)
+    @test reduce_window(+, [1,2], (0:4,)) ≈ [3,2]
+    @test reduce_window_naive(+, [1,2], (0:4,)) ≈ [3,2]
 
+    @test reduce_window(max, [1,3,4], (-1:3,)) == [4,4,4]
+    @test reduce_window_naive(max, [1,3,4], (-1:3,)) == [4,4,4]
 
-f = +
-arr = randn(rng, 5)
-window = (-1:3,)
-@test reduce_window(f, arr, window) ≈ reduce_window_naive(f, arr, window)
+    @test reduce_window(min, [5,3,4,1], (-10:0,)) == [5, 3, 3, 1]
+    @test reduce_window_naive(min, [5,3,4,1], (-10:0,)) == [5, 3, 3, 1]
 
-f = +
-arr = randn(rng, 5)
-window = (-10:0,)
-@test reduce_window(f, arr, window) ≈ reduce_window_naive(f, arr, window)
+    @test reduce_window(min, [5,3,4,1], (-10:10,)) == [1,1,1,1]
+    @test reduce_window_naive(min, [5,3,4,1], (-10:10,)) == [1,1,1,1]
+end
 
-f = +
-arr = randn(rng, 5)
-window = (0:4,)
-@test reduce_window(f, arr, window) ≈ reduce_window_naive(f, arr, window)
