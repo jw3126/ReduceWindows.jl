@@ -15,19 +15,6 @@ function apply_offset(I::CartesianIndex, dim, offset)
     CartesianIndex(t2)
 end
 
-function get_workspace_loglen(workspace_vector::AbstractVector, loglen)
-    Base.require_one_based_indexing(workspace_vector)
-    workspace_vector[loglen+1]
-end
-
-function alloc_workspace_vector(arr, window)
-    @argcheck ndims(arr) == length(window)
-    loglen = floorlog2(maximum(length, window))
-    map(1:loglen+1) do _
-        similar(arr)
-    end
-end
-
 function floorlog2(x::Integer)
     @argcheck x > 0
     loglen = 0
@@ -35,30 +22,6 @@ function floorlog2(x::Integer)
         loglen += 1
     end
     return loglen
-end
-
-@noinline function populate_workspace_along_axis!(f::F, arr, dim, window, neutral_element, workspace_vector) where {F}
-    if length(window[dim]) == 0
-        return workspace_vector
-    end
-    required_loglength = floorlog2(length(window[dim]))
-    loglen = 0
-    table = get_workspace_loglen(workspace_vector, loglen)
-    copy!(table, arr)
-    table_prev = table
-    while loglen < required_loglength
-        table_prev = get_workspace_loglen(workspace_vector, loglen)
-        table_next = get_workspace_loglen(workspace_vector, loglen+1)
-        offset = 2^loglen
-        for I in CartesianIndices(table_prev)
-            I2 = apply_offset(I, dim, offset)
-            x1 = table_prev[I]
-            x2 = get(table_prev, I2, neutral_element) # TODO SIMD friendly
-            table_next[I] = f(x1, x2)
-        end
-        loglen += 1
-    end
-    return workspace_vector
 end
 
 function op_along_axis2!(f::F, out, arg2, dim, offset, inds::CartesianIndices) where {F}
