@@ -90,12 +90,32 @@ function Base.getindex(d::Digits, i::Int)::Bool
     isodd(d.x >> (i-1))
 end
 
+function split_indices_dim_offset(CI::CartesianIndices, dim, offset)
+    inds = CI.indices
+    ax = inds[dim]
+    istop = last(ax)-offset
+    ax1 = first(ax):istop
+    istart = max(istop+1, first(ax))
+    ax2 = istart:last(ax)
+    @assert length(ax1) + length(ax2) == length(ax)
+    inds1 = Base.setindex(inds, ax1, dim)
+    inds2 = Base.setindex(inds, ax2, dim)
+    CI1 = CartesianIndices(inds1)
+    CI2 = CartesianIndices(inds2)
+    CI1, CI2
+end
+
 function power_stride!(f, out, inp, dim, offset, neutral_element)
-    for I in CartesianIndices(out)
+    ci1, ci2 = split_indices_dim_offset(CartesianIndices(axes_unitrange(out)), dim, offset)
+    for I in ci1
         I2 = apply_offset(I, dim, offset)
         x1 = inp[I]
-        x2 = get(inp, I2, neutral_element) # TODO SIMD friendly
+        x2 = inp[I2]
         out[I] = f(x1, x2)
+    end
+    for I in ci2
+        x1 = inp[I]
+        out[I] = x1
     end
     return out
 end
