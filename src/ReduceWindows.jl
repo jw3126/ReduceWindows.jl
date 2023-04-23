@@ -72,32 +72,6 @@ function op_along_axis2!(f::F, out, arg2, dim, offset, inds::CartesianIndices) w
     return out
 end
 
-function add_along_axis_first!(f::F, out, dim, window, neutral_element, workspace_vector) where {F}
-    # make sure the first element of out along axis is correct
-    winaxis = window[dim]
-    lo = first(winaxis)
-    if lo >= 0
-        return out
-    end
-    @assert lo <= 0
-    hi = last(winaxis)
-    @assert hi >= 0
-    digits = Digits(hi+1)
-    offset = 0
-    for (iloglen,dig) in enumerate(digits)
-        @assert dig in 0:1
-        if Bool(dig)
-            inds = axes_unitrange(out)
-            i0 = first(inds[dim])
-            inds = Base.setindex(inds, i0:i0, dim)
-            arg2 = workspace_vector[iloglen]
-            op_along_axis2!(f, out, arg2, dim, offset, CartesianIndices(inds))
-            offset += 2^(iloglen-1)
-        end
-    end
-    return out
-end
-
 function first_inner_index_axis(outaxis::AbstractUnitRange, winaxis::AbstractUnitRange)
     first(outaxis) - first(winaxis)
 end
@@ -159,15 +133,9 @@ end
     lo = first(winaxis)
     hi = last(winaxis)
     digits_inner = Digits(length(winaxis))
-    digits_first  = Digits(hi+1) 
-    digits_first = if lo >= 0
-        Digits(hi+1) 
-    else
-        0
-    end
+    digits_first = Digits((lo >= 0) ? 0 : hi+1)
     offset_inner = lo 
-    offset_first = 0#lo
-    add_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
+    offset_first = 0
     for iloglen in 1:32
         if digits_inner[iloglen]
             istart = first_inner_index_axis(axes(out,dim), winaxis)
@@ -178,17 +146,17 @@ end
             op_along_axis2!(f, out, arg2, dim, offset_inner, CartesianIndices(inds))
             offset_inner += 2^(iloglen-1)
         end
-        # if (lo > 0) && digits_first[iloglen]
-        #     inds = axes_unitrange(out)
-        #     i0 = first(inds[dim])
-        #     inds = Base.setindex(inds, i0:i0, dim)
-        #     arg2 = workspace_vector[iloglen]
-        #     op_along_axis2!(f, out, arg2, dim, offset_first, CartesianIndices(inds))
-        #     offset_first += 2^(iloglen-1)
-        # end
-        # if offset > size(out, dim)
-        #     break
-        # end
+        if digits_first[iloglen]
+            inds = axes_unitrange(out)
+            i0 = first(inds[dim])
+            inds = Base.setindex(inds, i0:i0, dim)
+            arg2 = workspace_vector[iloglen]
+            op_along_axis2!(f, out, arg2, dim, offset_first, CartesianIndices(inds))
+            offset_first += 2^(iloglen-1)
+        end
+        if 2^(iloglen-1) > size(out, dim)
+            break
+        end
     end
     add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
     return out
