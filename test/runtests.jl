@@ -63,6 +63,35 @@ end
     end
 end
 
+@testset "2d fuzz" begin
+    rng = Xoshiro(1)
+    for _ in 1:100
+        win = ntuple(2) do _
+            lo = rand(rng, -10:0)
+            hi = rand(rng, 0:10)
+            lo:hi
+        end
+        siz = rand(rng, 0:20, 2)
+        arr = randn(rng, siz...)
+        @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
+    end
+end
+
+@testset "nd fuzz" begin
+    rng = Xoshiro(1)
+    for _ in 1:100
+        nd = rand(rng, 1:4)
+        win = ntuple(nd) do _
+            lo = rand(rng, -5:0)
+            hi = rand(rng, 0:5)
+            lo:hi
+        end
+        siz = rand(rng, 0:5, nd)
+        arr = randn(rng, siz...)
+        @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
+    end
+end
+
 # import JET
 # @testset "JET" begin
 # arr = randn(Xoshiro(1), 10, 11)
