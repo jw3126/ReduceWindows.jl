@@ -80,7 +80,7 @@ function axes_unitrange(arr::AbstractArray{T,N})::NTuple{N,UnitRange{Int}} where
     map(UnitRange{Int}, axes(arr))
 end
 
-function add_along_axis_prefix!(f::F, out, dim, window, neutral_element, workspace_vector)::typeof(out) where {F}
+function add_along_axis_prefix!(f::F, out, inp, dim, window, neutral_element)::typeof(out) where {F}
     # make sure the front elements of out along axis is correct
     winaxis = window[dim]
     lo = first(winaxis)
@@ -95,7 +95,6 @@ function add_along_axis_prefix!(f::F, out, dim, window, neutral_element, workspa
     istop = first_inner_index_axis(axes(out,dim), winaxis)-1
     istop = clamp(istop, ifirst, ilast)
     inds = Base.setindex(inds, istart:istop, dim)
-    inp = first(workspace_vector)
 
     T = eltype(out)
     for I in CartesianIndices(inds)
@@ -158,7 +157,8 @@ end
             break
         end
     end
-    add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
+    inp = first(workspace_vector)
+    add_along_axis_prefix!(f, out, inp, dim, window, neutral_element)
     return out
 end
 
