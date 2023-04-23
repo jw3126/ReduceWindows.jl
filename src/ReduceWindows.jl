@@ -1,4 +1,5 @@
 module ReduceWindows
+export reduce_window
 
 using ArgCheck
 
@@ -36,7 +37,7 @@ function floorlog2(x::Integer)
     return loglen
 end
 
-function populate_workspace_along_axis!(f, arr, dim, window, neutral_element, workspace_vector)
+@noinline function populate_workspace_along_axis!(f::F, arr, dim, window, neutral_element, workspace_vector) where {F}
     if length(window[dim]) == 0
         return workspace_vector
     end
@@ -60,7 +61,7 @@ function populate_workspace_along_axis!(f, arr, dim, window, neutral_element, wo
     return workspace_vector
 end
 
-function op_along_axis2(f, out, arg2, dim, offset, inds::CartesianIndices)
+function op_along_axis2(f::F, out, arg2, dim, offset, inds::CartesianIndices) where {F}
     @assert axes(out) == axes(arg2)
     # TODO end
     for I1 in inds
@@ -72,17 +73,17 @@ function op_along_axis2(f, out, arg2, dim, offset, inds::CartesianIndices)
     return out
 end
 
-function add_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
+function add_along_axis_first!(f::F, out, dim, window, neutral_element, workspace_vector) where {F}
     # make sure the first element of out along axis is correct
     winaxis = window[dim]
     lo = first(winaxis)
     @assert lo <= 0
-    inds = axes(out)
+    inds = axes_unitrange(out)
     i0 = first(inds[dim])
     inds = Base.setindex(inds, i0:i0, dim)
     hi = last(winaxis)
     @assert hi >= 0
-    digits = Base.digits(hi+1, base=2)
+    digits = Base.digits(hi+1, base=2)::Vector{Int}
     offset = 0
     for (iloglen,dig) in enumerate(digits)
         @assert dig in 0:1
@@ -99,7 +100,11 @@ function first_inner_index_axis(outaxis::AbstractUnitRange, winaxis::AbstractUni
     first(outaxis) - first(winaxis)
 end
 
-function add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
+function axes_unitrange(arr)
+    map(UnitRange{Int}, axes(arr))
+end
+
+function add_along_axis_prefix!(f::F, out, dim, window, neutral_element, workspace_vector)::typeof(out) where {F}
     # make sure the front elements of out along axis is correct
     winaxis = window[dim]
     lo = first(winaxis)
@@ -108,7 +113,7 @@ function add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_
         return out
     end
     add_along_axis_first!(f, out, dim, window, neutral_element, workspace_vector)
-    inds = axes(out)
+    inds = axes_unitrange(out)
     ifirst = firstindex(out, dim)
     ilast = lastindex(out, dim)
     istart = min(ifirst + 1, ilast)
@@ -117,21 +122,22 @@ function add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_
     inds = Base.setindex(inds, istart:istop, dim)
     inp = first(workspace_vector)
 
+    T = eltype(out)
     for I in CartesianIndices(inds)
         I1 = apply_offset(I, dim, -1)
-        x1 = out[I1]
+        x1 = out[I1]::T
         I2 = apply_offset(I, dim, hi)
-        x2 = get(inp, I2, neutral_element) # TODO SIMD
+        x2 = get(inp, I2, neutral_element)::T # TODO SIMD
         out[I] = f(x1, x2)
     end
     return out
 end
 
-function add_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
+@noinline function add_along_axis!(f::F, out, dim, window, neutral_element, workspace_vector) where {F}
     add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
     winaxis = window[dim]
     istart = first_inner_index_axis(axes(out,dim), winaxis)
-    digits = Base.digits(length(winaxis), base=2)
+    digits = Base.digits(length(winaxis), base=2)::Vector{Int}
     offset = first(winaxis)
     for (iloglen,dig) in enumerate(digits)
         @assert dig in 0:1
@@ -160,15 +166,15 @@ function resolve_window(array_axes, window)
     map(shrink_window_axis,array_axes, window)
 end
 
-function reduce_window(f, arr, window; neutral_element=get_neutral_element(f, eltype(arr)))
-    window = resolve_window(axes(arr), window)
-    workspace_vector = alloc_workspace_vector(arr, window)
+function reduce_window(f::F, arr, window; neutral_element=get_neutral_element(f, eltype(arr))) where {F}
+    win = resolve_window(axes(arr), window)
+    workspace_vector = alloc_workspace_vector(arr, win)
     out = similar(arr)
     inp = copy!(similar(arr), arr)
     for dim in 1:ndims(arr)
-        populate_workspace_along_axis!(f, inp, dim, window, neutral_element, workspace_vector)
+        populate_workspace_along_axis!(f, inp, dim, win, neutral_element, workspace_vector)
         fill!(out, neutral_element)
-        add_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
+        add_along_axis!(f, out, dim, win, neutral_element, workspace_vector)
         (inp, out) = (out, inp)
     end
     (inp, out) = (out, inp)
