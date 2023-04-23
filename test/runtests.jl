@@ -25,3 +25,6 @@ using Random: Xoshiro
     @test reduce_window_naive(min, [5,3,4,1], (-10:10,)) == [1,1,1,1]
 end
 
+@testset "2d explicit" begin
+
+end

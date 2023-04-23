@@ -8,16 +8,6 @@ end
 function fastmin(x,y)
     ifelse(x < y, x, y)
 end
-function assoc_along_axis2!(f, out, inp, dim, offset, neutral_element)
-    @argcheck axes(inp) == axes(out)
-    for I in CartesianIndices(inp)
-        I2 = apply_offset(I, dim, offset)
-        x1 = inp[I]
-        x2 = get(inp, I2, neutral_element) # TODO SIMD friendly
-        out[I] = f(x1, x2)
-    end
-    return out
-end
 function apply_offset(I::CartesianIndex, dim, offset)
     t = Tuple(I)
     t2 = Base.setindex(t, t[dim]+offset, dim)
@@ -128,10 +118,10 @@ function add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_
     inp = first(workspace_vector)
 
     for I in CartesianIndices(inds)
-        I1 = apply_offset(I, dim, hi)
-        x1 = get(inp, I1, neutral_element) # TODO SIMD
-        I2 = apply_offset(I, dim, -1)
-        x2 = out[I2]
+        I1 = apply_offset(I, dim, -1)
+        x1 = out[I1]
+        I2 = apply_offset(I, dim, hi)
+        x2 = get(inp, I2, neutral_element) # TODO SIMD
         out[I] = f(x1, x2)
     end
     return out
@@ -174,11 +164,11 @@ function reduce_window(f, arr, window; neutral_element=get_neutral_element(f, el
     @argcheck ndims(arr) == 1
     window = resolve_window(axes(arr), window)
     workspace_vector = alloc_workspace_vector(arr, window)
-    dim = 1
-    populate_workspace_along_axis!(f, arr, dim, window, neutral_element, workspace_vector)
-    out = similar(arr)
-    fill!(out, neutral_element)
-    add_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
+    out = fill!(similar(arr), neutral_element)
+    for dim in 1:ndims(arr)
+        populate_workspace_along_axis!(f, arr, dim, window, neutral_element, workspace_vector)
+        add_along_axis!(f, out, dim, window, neutral_element, workspace_vector)
+    end
     return out
 end
 
@@ -194,7 +184,7 @@ function reduce_window_naive(f, arr::AbstractArray{T,N}, window;
         end
         patch = view(arr, inds...)
         val = reduce(f, patch, init=neutral_element)
-        out[I] =val
+        out[I] = val
     end
     return out
 end
