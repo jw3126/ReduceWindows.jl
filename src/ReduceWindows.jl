@@ -9,7 +9,7 @@ end
 function fastmin(x,y)
     ifelse(x < y, x, y)
 end
-Base.@propagate_inbounds function apply_offset(I::CartesianIndex, dim, offset)
+Base.@propagate_inbounds function apply_offset(I::CartesianIndex, ::Val{dim}, offset) where {dim}
     t = Tuple(I)
     t2 = Base.setindex(t, t[dim]+offset, dim)
     CartesianIndex(t2)
@@ -24,10 +24,10 @@ function floorlog2(x::Integer)
     return loglen
 end
 
-function op_along_axis2!(f::F, out, arg2, dim, offset, inds::CartesianIndices) where {F}
+function op_along_axis2!(f::F, out, arg2, Dim, offset, inds::CartesianIndices) where {F}
     @assert axes(out) == axes(arg2)
     @inbounds @simd for I1 in inds
-        I2 = apply_offset(I1, dim, offset)
+        I2 = apply_offset(I1, Dim, offset)
         x1 = out[I1]
         x2 = arg2[I2]
         out[I1] = f(x1, x2)
@@ -43,7 +43,9 @@ function axes_unitrange(arr::AbstractArray{T,N})::NTuple{N,UnitRange{Int}} where
     map(UnitRange{Int}, axes(arr))
 end
 
-function add_along_axis_prefix!(f::F, out, inp, dim, window, neutral_element)::typeof(out) where {F}
+unwrap(::Val{x}) where {x} = x
+function add_along_axis_prefix!(f::F, out, inp, Dim::Val, window, neutral_element)::typeof(out) where {F}
+    dim = unwrap(Dim)
     # make sure the front elements of out along axis is correct
     winaxis = window[dim]
     lo = first(winaxis)
@@ -66,14 +68,14 @@ function add_along_axis_prefix!(f::F, out, inp, dim, window, neutral_element)::t
     CI1, CI2 = split_indices_dim_istop(CI, dim, istop)
     @check length(CI1) + length(CI2) == length(CI)
     @inbounds @simd for I in CI1
-        I1 = apply_offset(I, dim, -1)
+        I1 = apply_offset(I, Dim, -1)
         x1 = out[I1]::T
-        I2 = apply_offset(I, dim, hi)
+        I2 = apply_offset(I, Dim, hi)
         x2 = inp[I2]
         out[I] = f(x1, x2)
     end
     @inbounds @simd for I in CI2
-        I1 = apply_offset(I, dim, -1)
+        I1 = apply_offset(I, Dim, -1)
         x1 = out[I1]::T
         out[I] = x1
     end
@@ -122,10 +124,11 @@ function split_indices_dim_offset(CI::CartesianIndices, dim, offset)
     split_indices_dim_istop(CI, dim, istop)
 end
 
-function power_stride!(f, out, inp, dim, offset, neutral_element)
+function power_stride!(f, out, inp, Dim::Val, offset, neutral_element)
+    dim = unwrap(Dim)
     ci1, ci2 = split_indices_dim_offset(CartesianIndices(axes_unitrange(out)), dim, offset)
     @inbounds @simd for I in ci1
-        I2 = apply_offset(I, dim, offset)
+        I2 = apply_offset(I, Dim, offset)
         x1 = inp[I]
         x2 = inp[I2]
         out[I] = f(x1, x2)
@@ -137,7 +140,8 @@ function power_stride!(f, out, inp, dim, offset, neutral_element)
     return out
 end
 
-@noinline function add_along_axis!(f::F, out, inp, dim, window, neutral_element, workspace) where {F}
+@noinline function add_along_axis!(f::F, out, inp, Dim::Val, window, neutral_element, workspace) where {F}
+    dim = unwrap(Dim)
     winaxis = window[dim]
     lo = first(winaxis)
     hi = last(winaxis)
@@ -157,20 +161,20 @@ end
             istop = lastindex(out, dim)
             istop = min(istop, istop-offset_inner)
             inds = Base.setindex(axes_unitrange(out), istart:istop, dim)
-            op_along_axis2!(f, out, arg2, dim, offset_inner, CartesianIndices(inds))
+            op_along_axis2!(f, out, arg2, Dim, offset_inner, CartesianIndices(inds))
             offset_inner += 2^(iloglen-1)
         end
         if digits_first[iloglen]
             inds = axes_unitrange(out)
             i0 = first(inds[dim])
             inds = Base.setindex(inds, i0:i0, dim)
-            op_along_axis2!(f, out, arg2, dim, offset_first, CartesianIndices(inds))
+            op_along_axis2!(f, out, arg2, Dim, offset_first, CartesianIndices(inds))
             offset_first += 2^(iloglen-1)
         end
         winp, wout = wout, winp
-        power_stride!(f, wout, winp, dim, 2^(iloglen-1), neutral_element)
+        power_stride!(f, wout, winp, Dim, 2^(iloglen-1), neutral_element)
     end
-    add_along_axis_prefix!(f, out, inp, dim, window, neutral_element)
+    add_along_axis_prefix!(f, out, inp, Dim, window, neutral_element)
     return out
 end
 
@@ -194,7 +198,8 @@ function reduce_window(f::F, arr, window; neutral_element=get_neutral_element(f,
     inp = copy!(similar(arr), arr)
     for dim in 1:ndims(arr)
         fill!(out, neutral_element)
-        add_along_axis!(f, out, inp, dim, win, neutral_element, workspace)
+        Dim = Val(dim)
+        add_along_axis!(f, out, inp, Dim, win, neutral_element, workspace)
         (inp, out) = (out, inp)
     end
     (inp, out) = (out, inp)
