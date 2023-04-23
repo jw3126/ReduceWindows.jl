@@ -1,7 +1,15 @@
 using ReduceWindows: reduce_window, reduce_window_naive
 using ReduceWindows: fastmin, fastmax
+using ReduceWindows
 using Test
 using Random: Xoshiro
+
+@testset "Digits" begin
+    Digits = ReduceWindows.Digits
+    for x in 1:100
+        @test Base.digits(x,base=2) == collect(Digits(x))
+    end
+end
 
 @testset "1d explicit" begin
     @test reduce_window(+, [1], (-1:0,)) == [1]

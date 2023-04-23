@@ -82,7 +82,7 @@ function add_along_axis_first!(f::F, out, dim, window, neutral_element, workspac
     inds = Base.setindex(inds, i0:i0, dim)
     hi = last(winaxis)
     @assert hi >= 0
-    digits = Base.digits(hi+1, base=2)::Vector{Int}
+    digits = Digits(hi+1)
     offset = 0
     for (iloglen,dig) in enumerate(digits)
         @assert dig in 0:1
@@ -132,11 +132,28 @@ function add_along_axis_prefix!(f::F, out, dim, window, neutral_element, workspa
     return out
 end
 
+struct Digits
+    x::Int
+end
+Base.eltype(::Type{Digits}) = Bool
+function Base.iterate(d::Digits, state=d.x)
+    if iszero(state)
+        nothing
+    else
+        item = isodd(state)
+        state = state >> 1
+        (item, state)
+    end
+end
+function Base.IteratorSize(::Type{Digits})
+    Base.SizeUnknown() # TODO add length
+end
+
 @noinline function add_along_axis!(f::F, out, dim, window, neutral_element, workspace_vector) where {F}
     add_along_axis_prefix!(f, out, dim, window, neutral_element, workspace_vector)
     winaxis = window[dim]
     istart = first_inner_index_axis(axes(out,dim), winaxis)
-    digits = Base.digits(length(winaxis), base=2)::Vector{Int}
+    digits = Digits(length(winaxis))
     offset = first(winaxis)
     for (iloglen,dig) in enumerate(digits)
         @assert dig in 0:1
