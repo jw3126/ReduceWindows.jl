@@ -31,11 +31,12 @@ arr = randn(500,500)
 window = (-50:50, -50:50)
 using ImageFiltering: mapwindow
 mapwindow(maximum, arr, window) # warmup
-@showtime mapwindow(maximum, arr, window)
+out1 = @showtime mapwindow(maximum, arr, window)
 
 using ReduceWindows
 reduce_window(max, arr, window) # warmup
-@showtime reduce_window(max, arr, window)
+out2 = @showtime reduce_window(max, arr, window)
+@assert out1 == out2
 ```
 ```
 mapwindow(maximum, arr, window): 2.075822 seconds (1.26 M allocations: 227.561 MiB, 0.76% gc time)
