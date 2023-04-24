@@ -102,7 +102,7 @@ end
         end
         siz = rand(rng, 0:5, nd)
         arr = randn(rng, siz...)
-        op = rand(rng, [+, min, max, fastmin, fastmax])
+        op = rand(rng, [+, *, min, max, fastmin, fastmax])
         @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
     end
 end

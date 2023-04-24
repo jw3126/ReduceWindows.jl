@@ -191,6 +191,15 @@ function resolve_window(array_axes, window)
     map(shrink_window_axis,array_axes, window)
 end
 
+"""
+
+    reduce_window(f, arr, window; [neutral_element,])
+
+Move a sliding window over the `arr` and apply `reduce(f, view(arr, window...), init=neutral_element)`.
+This function assumes, that `f` is associative, commutative and `f(x,neutral_element) == x`.
+
+Time complexity is `O(length(arr) * log(prod(length,window)))`.
+"""
 function reduce_window(f::F, arr, window; neutral_element=get_neutral_element(f, eltype(arr))) where {F}
     win = resolve_window(axes(arr), window)
     workspace = (;winp=similar(arr), wout=similar(arr))
@@ -238,12 +247,8 @@ end
 function get_neutral_element(::typeof(+), T)
     zero(T)
 end
-
-
-
-
-
-
-# Write your package code here.
+function get_neutral_element(::typeof(*), T)
+    one(T)
+end
 
 end
