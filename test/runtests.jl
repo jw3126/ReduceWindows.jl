@@ -7,17 +7,33 @@ using OffsetArrays
 
 @testset "Digits" begin
     Digits = ReduceWindows.Digits
-    for x in 1:100
+    for x in 1:260
         digits::Digits = @inferred Digits(x)
         @test Base.digits(x,base=2) == collect(digits)
         @test collect(digits) == [d for d in digits]
         n = length(collect(digits))
         @test collect(digits) == [Digits(x)[i] for i in 1:n]
     end
+
+    @test length(Digits(0)) == 0
     @test length(Digits(1)) == 1
     @test length(Digits(2)) == 2
     @test length(Digits(3)) == 2
     @test length(Digits(4)) == 3
+    @test length(Digits(5)) == 3
+    @test length(Digits(6)) == 3
+    @test length(Digits(7)) == 3
+    @test length(Digits(8)) == 4
+    @test length(Digits(9)) == 4
+    @test length(Digits(10)) == 4
+    @test length(Digits(11)) == 4
+    @test length(Digits(12)) == 4
+    @test length(Digits(13)) == 4
+    @test length(Digits(14)) == 4
+    @test length(Digits(15)) == 4
+    @test length(Digits(16)) == 5
+    @test length(Digits(17)) == 5
+
     for k in 1:60
         @test length(Digits(2^k+1)) == k+1
         @test length(Digits(2^k)) == k+1
@@ -80,11 +96,11 @@ end
 
 @testset "1d fuzz" begin
     rng = Xoshiro(1786867373)
-    for _ in 1:100
-        lo = rand(rng, -10:0)
-        hi = rand(rng, 0:10)
+    for _ in 1:1000
+        lo = rand(rng, -100:0)
+        hi = rand(rng, 0:100)
         win = (lo:hi,)
-        len = rand(rng, 0:20)
+        len = rand(rng, 0:200)
         arr = randn(rng, len)
         @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
     end
@@ -92,7 +108,7 @@ end
 
 @testset "2d fuzz" begin
     rng = Xoshiro(2379087392)
-    for _ in 1:100
+    for _ in 1:1000
         win = ntuple(2) do _
             lo = rand(rng, -10:0)
             hi = rand(rng, 0:10)
@@ -112,7 +128,7 @@ end
 @testset "nd fuzz" begin
     rng = Xoshiro(1436607836)
     myadd(x,y) = x + y
-    for _ in 1:1000
+    for _ in 1:100
         nd = rand(rng, 1:5)
         win = ntuple(nd) do _
             lo = rand(rng, -4:0)
