@@ -104,10 +104,13 @@ function Base.iterate(d::Digits, state=d.x)
     end
 end
 function Base.length(d::Digits)
-    8*sizeof(d.x)
+    position_top_set_bit(d.x)
 end
 function Base.getindex(d::Digits, i::Int)::Bool
     isodd(d.x >> (i-1))
+end
+function position_top_set_bit(x::Integer)
+    8*sizeof(x) - leading_zeros(x)
 end
 
 function split_indices_dim_istop(CI::CartesianIndices, dim, istop)
@@ -240,7 +243,7 @@ function reduce_window_naive(f, arr::AbstractArray{T,N}, window) where {T,N}
     win::NTuple{N,UnitRange} = resolve_window(axes(arr), window)
     out = similar(arr)
     for I in CartesianIndices(arr)
-        inds = map(win, Tuple(I), axes(arr)) do r, i, ax
+        inds::NTuple{N,UnitRange} = map(win, Tuple(I), axes(arr)) do r, i, ax
             istart = max(i + first(r), first(ax))
             istop = min(i+last(r), last(ax))
             istart:istop

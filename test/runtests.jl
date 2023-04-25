@@ -79,7 +79,7 @@ end
 end
 
 @testset "1d fuzz" begin
-    rng = Xoshiro(1)
+    rng = Xoshiro(1786867373)
     for _ in 1:100
         lo = rand(rng, -10:0)
         hi = rand(rng, 0:10)
@@ -91,7 +91,7 @@ end
 end
 
 @testset "2d fuzz" begin
-    rng = Xoshiro(1)
+    rng = Xoshiro(2379087392)
     for _ in 1:100
         win = ntuple(2) do _
             lo = rand(rng, -10:0)
@@ -110,16 +110,16 @@ end
 end
 
 @testset "nd fuzz" begin
-    rng = Xoshiro(1)
+    rng = Xoshiro(1436607836)
     myadd(x,y) = x + y
-    for _ in 1:100
-        nd = rand(rng, 1:4)
+    for _ in 1:1000
+        nd = rand(rng, 1:5)
         win = ntuple(nd) do _
-            lo = rand(rng, -5:0)
-            hi = rand(rng, 0:5)
+            lo = rand(rng, -4:0)
+            hi = rand(rng, 0:4)
             lo:hi
         end
-        siz = Tuple(rand(rng, 0:5, nd))
+        siz = Tuple(rand(rng, 0:8, nd))
         arr = randn(rng, siz...)
         op = rand(rng, [+, *, min, max, fastmin, fastmax, myadd])
         @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
