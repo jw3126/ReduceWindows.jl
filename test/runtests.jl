@@ -3,6 +3,7 @@ using ReduceWindows: fastmin, fastmax
 using ReduceWindows
 using Test
 using Random: Xoshiro
+using OffsetArrays
 
 # @testset "Digits" begin
 #     Digits = ReduceWindows.Digits
@@ -46,6 +47,9 @@ using Random: Xoshiro
 
     @test reduce_window(min, [5,3,4,1], (-10:10,)) == [1,1,1,1]
     @test reduce_window_naive(min, [5,3,4,1], (-10:10,)) == [1,1,1,1]
+
+    @test reduce_window(+, OffsetArray([1,2,3,4],-2:1), (-2:1,)) == OffsetArray([3, 6, 10, 9], -2:1)
+    @test reduce_window_naive(+, OffsetArray([1,2,3,4],-2:1), (-2:1,)) == OffsetArray([3, 6, 10, 9], -2:1)
 end
 
 @testset "2d explicit" begin
@@ -91,8 +95,14 @@ end
     end
 end
 
+@testset "eltype" begin
+    @test typeof(@inferred reduce_window(+, 1:4, (-2:1,))) == Vector{Int}
+    @test typeof(@inferred reduce_window(max, Float32[1,2], (-2:1,))) == Vector{Float32}
+end
+
 @testset "nd fuzz" begin
     rng = Xoshiro(1)
+    myadd(x,y) = x + y
     for _ in 1:100
         nd = rand(rng, 1:4)
         win = ntuple(nd) do _
@@ -100,10 +110,18 @@ end
             hi = rand(rng, 0:5)
             lo:hi
         end
-        siz = rand(rng, 0:5, nd)
+        siz = Tuple(rand(rng, 0:5, nd))
         arr = randn(rng, siz...)
-        op = rand(rng, [+, *, min, max, fastmin, fastmax])
+        op = rand(rng, [+, *, min, max, fastmin, fastmax, myadd])
         @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
+
+        oaxes = map(siz) do n
+            start = rand(rng, -10:10)
+            stop = start+n-1
+            start:stop
+        end
+        oarr = OffsetArray(arr, oaxes)
+        @test reduce_window(+, oarr, win) ≈ reduce_window_naive(+, oarr, win)
     end
 end
 
