@@ -35,6 +35,15 @@ function op_along_axis2!(f::F, out, arg2, Dim, offset, inds::CartesianIndices) w
     return out
 end
 
+function copy_with_offset!(out, arg2, Dim, offset, inds)
+    @assert axes(out) == axes(arg2)
+    @inbounds @simd for I1 in inds
+        I2 = apply_offset(I1, Dim, offset)
+        x2 = arg2[I2]
+        out[I1] = x2
+    end
+end
+
 function first_inner_index_axis(outaxis::AbstractUnitRange, winaxis::AbstractUnitRange)
     first(outaxis) - first(winaxis)
 end
@@ -150,7 +159,9 @@ end
     offset_first = 0
     (;winp, wout) = workspace
     copy!(wout, inp)
-    for iloglen in 1:32
+    out_inner_touched = false
+    out_first_touched = false
+    for iloglen in 1:64
         if 2^(iloglen) > 2*length(winaxis)
             break
         end
@@ -160,19 +171,31 @@ end
             istop = lastindex(out, dim)
             istop = min(istop, istop-offset_inner)
             inds = Base.setindex(axes_unitrange(out), istart:istop, dim)
-            op_along_axis2!(f, out, arg2, Dim, offset_inner, CartesianIndices(inds))
+            if out_inner_touched
+                op_along_axis2!(f, out, arg2, Dim, offset_inner, CartesianIndices(inds))
+            else
+                copy_with_offset!(out, arg2, Dim, offset_inner, CartesianIndices(inds))
+                out_inner_touched = true
+            end
             offset_inner += 2^(iloglen-1)
         end
         if digits_first[iloglen]
             inds = axes_unitrange(out)
             i0 = first(inds[dim])
             inds = Base.setindex(inds, i0:i0, dim)
-            op_along_axis2!(f, out, arg2, Dim, offset_first, CartesianIndices(inds))
+            if out_first_touched
+                op_along_axis2!(f, out, arg2, Dim, offset_first, CartesianIndices(inds))
+            else
+                copy_with_offset!(out, arg2, Dim, offset_first, CartesianIndices(inds))
+                out_first_touched = true
+            end
             offset_first += 2^(iloglen-1)
         end
         winp, wout = wout, winp
         power_stride!(f, wout, winp, Dim, 2^(iloglen-1))
     end
+    # @assert out_first_touched
+    @assert out_inner_touched
     add_along_axis_prefix!(f, out, inp, Dim, window)
     return out
 end
@@ -192,20 +215,19 @@ end
 
 """
 
-    reduce_window(f, arr, window; [neutral_element,])
+    reduce_window(f, arr, window)
 
-Move a sliding window over the `arr` and apply `reduce(f, view(arr, window...), init=neutral_element)`.
-This function assumes, that `f` is associative, commutative and `f(x,neutral_element) == x`.
+Move a sliding window over the `arr` and apply `reduce(f, view(arr, window...))`
+This function assumes, that `f` is associative, commutative.
 
 Time complexity is `O(length(arr) * log(prod(length,window)))`.
 """
-function reduce_window(f::F, arr, window; neutral_element=get_neutral_element(f, eltype(arr))) where {F}
+function reduce_window(f::F, arr, window) where {F}
     win = resolve_window(axes(arr), window)
     workspace = (;winp=similar(arr), wout=similar(arr))
     out = similar(arr)
     inp = copy!(similar(arr), arr)
     for dim in 1:ndims(arr)
-        fill!(out, neutral_element)
         Dim = Val(dim)
         add_along_axis!(f, out, inp, Dim, win, workspace)
         (inp, out) = (out, inp)
@@ -214,8 +236,7 @@ function reduce_window(f::F, arr, window; neutral_element=get_neutral_element(f,
     return out
 end
 
-function reduce_window_naive(f, arr::AbstractArray{T,N}, window; 
-        neutral_element=get_neutral_element(f,T)) where {T,N}
+function reduce_window_naive(f, arr::AbstractArray{T,N}, window) where {T,N}
     win::NTuple{N,UnitRange} = resolve_window(axes(arr), window)
     out = similar(arr)
     for I in CartesianIndices(arr)
@@ -225,29 +246,10 @@ function reduce_window_naive(f, arr::AbstractArray{T,N}, window;
             istart:istop
         end
         patch = view(arr, inds...)
-        val = reduce(f, patch, init=neutral_element)
+        val = reduce(f, patch)
         out[I] = val
     end
     return out
-end
-
-function get_neutral_element(::typeof(min), T)
-    typemax(T)
-end
-function get_neutral_element(::typeof(max), T)
-    typemin(T)
-end
-function get_neutral_element(::typeof(fastmin), T)
-    typemax(T)
-end
-function get_neutral_element(::typeof(fastmax), T)
-    typemin(T)
-end
-function get_neutral_element(::typeof(+), T)
-    zero(T)
-end
-function get_neutral_element(::typeof(*), T)
-    one(T)
 end
 
 end
