@@ -44,7 +44,7 @@ function axes_unitrange(arr::AbstractArray{T,N})::NTuple{N,UnitRange{Int}} where
 end
 
 unwrap(::Val{x}) where {x} = x
-function add_along_axis_prefix!(f::F, out, inp, Dim::Val, window, neutral_element)::typeof(out) where {F}
+function add_along_axis_prefix!(f::F, out, inp, Dim::Val, window)::typeof(out) where {F}
     dim = unwrap(Dim)
     # make sure the front elements of out along axis is correct
     winaxis = window[dim]
@@ -62,7 +62,6 @@ function add_along_axis_prefix!(f::F, out, inp, Dim::Val, window, neutral_elemen
     inds = Base.setindex(inds, istart:istop, dim)
 
     T = eltype(out)
-    offset = hi
     istop = lastindex(out, dim) - hi
     CI = CartesianIndices(inds)
     CI1, CI2 = split_indices_dim_istop(CI, dim, istop)
@@ -124,7 +123,7 @@ function split_indices_dim_offset(CI::CartesianIndices, dim, offset)
     split_indices_dim_istop(CI, dim, istop)
 end
 
-function power_stride!(f, out, inp, Dim::Val, offset, neutral_element)
+function power_stride!(f, out, inp, Dim::Val, offset)
     dim = unwrap(Dim)
     ci1, ci2 = split_indices_dim_offset(CartesianIndices(axes_unitrange(out)), dim, offset)
     @inbounds @simd for I in ci1
@@ -140,7 +139,7 @@ function power_stride!(f, out, inp, Dim::Val, offset, neutral_element)
     return out
 end
 
-@noinline function add_along_axis!(f::F, out, inp, Dim::Val, window, neutral_element, workspace) where {F}
+@noinline function add_along_axis!(f::F, out, inp, Dim::Val, window, workspace) where {F}
     dim = unwrap(Dim)
     winaxis = window[dim]
     lo = first(winaxis)
@@ -172,9 +171,9 @@ end
             offset_first += 2^(iloglen-1)
         end
         winp, wout = wout, winp
-        power_stride!(f, wout, winp, Dim, 2^(iloglen-1), neutral_element)
+        power_stride!(f, wout, winp, Dim, 2^(iloglen-1))
     end
-    add_along_axis_prefix!(f, out, inp, Dim, window, neutral_element)
+    add_along_axis_prefix!(f, out, inp, Dim, window)
     return out
 end
 
@@ -208,7 +207,7 @@ function reduce_window(f::F, arr, window; neutral_element=get_neutral_element(f,
     for dim in 1:ndims(arr)
         fill!(out, neutral_element)
         Dim = Val(dim)
-        add_along_axis!(f, out, inp, Dim, win, neutral_element, workspace)
+        add_along_axis!(f, out, inp, Dim, win, workspace)
         (inp, out) = (out, inp)
     end
     (inp, out) = (out, inp)
