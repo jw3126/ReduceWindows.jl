@@ -1,7 +1,7 @@
 name = "ReduceWindows"
 uuid = "577e98d7-bbac-4083-8c31-d4f64f54a197"
 authors = ["Jan Weidner <jw3126@gmail.com> and contributors"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 ArgCheck = "dce04be8-c92d-5529-be00-80e4d2c0e197"
