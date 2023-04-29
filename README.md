@@ -67,6 +67,6 @@ opcount_reduce_window = 4775000
 ```
 # Alternatives
 
-* [ImageFiltering.jl](https://github.com/JuliaImages/ImageFiltering.jl) much more features than
-  this packge, but slow for large windows.
+* [ImageFiltering.jl](https://github.com/JuliaImages/ImageFiltering.jl) much more features than this packge, but slow for large windows.
 * [MeanFilters.jl](https://github.com/jw3126/MeanFilters.jl) fast, lightwight but very narrow usecase.
+* [StaticKernels.jl](https://github.com/stev47/StaticKernels.jl) has very good performance for small windows.
