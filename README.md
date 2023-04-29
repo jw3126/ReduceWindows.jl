@@ -42,7 +42,31 @@ out2 = @showtime reduce_window(max, arr, window)
 mapwindow(maximum, arr, window): 2.075822 seconds (1.26 M allocations: 227.561 MiB, 0.76% gc time)
 reduce_window(max, arr, window): 0.002320 seconds (14 allocations: 7.630 MiB)
 ```
+Naively reducing a windows of size `k` over an array of size `n` is `O(k*n)`. 
+However the algorithm implemented here is `O(log(k)*n)` making it practical to reduce over large windows.
+```julia
+arr = randn(500,500)
+window = (-50:50, -50:50)
+using ImageFiltering: mapwindow
+using ReduceWindows
+const OPCOUNT = Ref(0)
+function mymax(x,y)
+    OPCOUNT[] += 1
+    max(x,y)
+end
 
+mapwindow(w->reduce(mymax, w), arr, window)
+opcount_naive = OPCOUNT[]
+OPCOUNT[] = 0
+reduce_window(mymax, arr, window)
+opcount_reduce_window = OPCOUNT[]
+@show opcount_naive
+@show opcount_reduce_window
+```
+```
+opcount_naive = 2550010200
+opcount_reduce_window = 4775000
+```
 # Alternatives
 
 * [ImageFiltering.jl](https://github.com/JuliaImages/ImageFiltering.jl) much more features than
