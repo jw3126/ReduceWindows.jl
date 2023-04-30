@@ -1,5 +1,6 @@
 using ReduceWindows: reduce_window, reduce_window_naive
 using ReduceWindows: along_axis!, calc_fwd!, calc_bwd!, DeadPool
+using ReduceWindows: ON, ONK, ONLogK
 using ReduceWindows: fastmin, fastmax
 using ReduceWindows
 using Test
@@ -24,13 +25,13 @@ function calc_bwd_free_monoid(;length, stride)
     return out
 end
 
-function along_axis_free_monoid(; length, winaxis)
+function along_axis_free_monoid(; length, winaxis, alg=ON())
     inp = [[i] for i in 1:length]
     f = vcat
     out = fill(Int[], length)
     Dim = Val(1)
     deadpool = DeadPool(inp)
-    along_axis!(f, out, inp, Dim, winaxis, deadpool)
+    along_axis!(f, out, inp, Dim, winaxis, alg, deadpool)
     return out
 end
 

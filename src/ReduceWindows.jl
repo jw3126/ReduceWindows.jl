@@ -76,10 +76,9 @@ function axes_unitrange(arr::AbstractArray{T,N})::NTuple{N,UnitRange{Int}} where
 end
 
 unwrap(::Val{x}) where {x} = x
-function along_axis_prefix!(f::F, out, inp, Dim::Val, window)::typeof(out) where {F}
+function along_axis_prefix!(f::F, out, inp, Dim::Val, winaxis)::typeof(out) where {F}
     dim = unwrap(Dim)
     # make sure the front elements of out along axis is correct
-    winaxis = window[dim]
     lo = first(winaxis)
     hi = last(winaxis)
     if lo >= 0
@@ -174,9 +173,8 @@ function power_stride!(f, out, inp, Dim::Val, offset)
     return out
 end
 
-@noinline function along_axis!(f::F, out, inp, Dim::Val, window, alg::ONLogK, deadpool) where {F}
+@noinline function along_axis!(f::F, out, inp, Dim::Val, winaxis, alg::ONLogK, deadpool) where {F}
     dim = unwrap(Dim)
-    winaxis = window[dim]
     lo = first(winaxis)
     hi = last(winaxis)
     digits_inner = Digits(length(winaxis))
@@ -185,7 +183,7 @@ end
     offset_first = 0
     winp = alloc!(deadpool)
     wout = alloc!(deadpool)
-    copy!(wout, inp)
+    copy!(wout, inp) # TODO deadpool can help elide copy
     out_inner_touched = false
     out_first_touched = false
     for iloglen in 1:64
@@ -218,23 +216,23 @@ end
             end
             offset_first += 2^(iloglen-1)
         end
-        winp, wout = wout, winp
+        winp, wout = wout, winp # TODO use deadpool instead of swapping
         power_stride!(f, wout, winp, Dim, 2^(iloglen-1))
     end
     free!(deadpool, wout)
     free!(deadpool, winp)
     # @assert out_first_touched
     @assert out_inner_touched
-    along_axis_prefix!(f, out, inp, Dim, window)
+    along_axis_prefix!(f, out, inp, Dim, winaxis)
     return out
 end
 
-function shrink_window_axis(arraxis::AbstractUnitRange, windowaxis::AbstractUnitRange)
-    @argcheck !isempty(windowaxis)
-    @argcheck 0 in windowaxis
+function shrink_window_axis(arraxis::AbstractUnitRange, winaxis::AbstractUnitRange)
+    @argcheck !isempty(winaxis)
+    @argcheck 0 in winaxis
     l = length(arraxis)
-    istart = max(-l, first(windowaxis))
-    istop  = min(l, last(windowaxis))
+    istart = max(-l, first(winaxis))
+    istop  = min(l, last(winaxis))
     return istart:istop
 end
 
@@ -270,7 +268,7 @@ function _reduce_window(f, arr, window, alg, deadpool)
     for dim in 1:ndims(arr)
         Dim = Val(dim)
         out = alloc!(deadpool)
-        along_axis!(f, out, inp, Dim, window, alg, deadpool)
+        along_axis!(f, out, inp, Dim, window[dim], alg, deadpool)
         (inp === arr) || free!(deadpool, inp)
         inp = out
     end
@@ -353,7 +351,7 @@ end
 
 
 function along_axis!(f::F, out, inp, 
-        Dim::Val{dim}, winaxis::AbstractUnitRange, deadpool) where {F,dim}
+        Dim::Val{dim}, winaxis::AbstractUnitRange, ::ON, deadpool) where {F,dim}
     @assert axes(out) == axes(inp)
     @assert 0 in winaxis
     fwd = alloc!(deadpool)
