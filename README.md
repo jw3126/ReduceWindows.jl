@@ -42,6 +42,7 @@ reduce_window(max, arr, window): 0.002320 seconds (14 allocations: 7.630 MiB)
 ```
 Naively reducing a windows of size `k` over an array of size `n` is `O(k*n)`. 
 However the algorithm implemented here is `O(log(k)*n)` making it practical to reduce over large windows.
+This packages also ships an `O(n)` algorithm, for extremly large windows or very costly ops.
 ```julia
 arr = randn(500,500)
 window = (-50:50, -50:50)

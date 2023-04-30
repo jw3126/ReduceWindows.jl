@@ -363,24 +363,44 @@ function calc_fwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
     return out
 end
 
+function calc_bwd_inner!(f::F, out, inp, Dim::Val{dim}, stride, starts::AbstractRange) where {F,dim}
+    slices(out, Dim, starts) .= slices(inp, Dim, starts)
+    for offset in 1:(stride-1)
+        r1 = starts .- offset
+        r0 = starts .- (offset -1)
+        slices(out, Dim, r1) .= f.(slices(inp, Dim, r1), slices(out, Dim, r0), )
+    end
+    return out
+end
+
+function calc_bwd_inner!(f::F, out, inp, Dim::Val{1}, stride, starts::AbstractRange) where {F,dim}
+    @inbounds for ci_rest in CartesianIndices(Base.tail(axes(inp)))
+        i_rest = Tuple(ci_rest)
+        for start in starts
+            out[start, i_rest...] = inp[start, i_rest...]
+            for offset in 1:(stride-1)
+                i1 = start - offset
+                i0 = start - (offset -1)
+                out[i1, i_rest...] = f(inp[i1, i_rest...], out[i0, i_rest...])
+            end
+        end
+    end
+    return out
+end
+
 function calc_bwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
     @assert axes(out) == axes(inp)
     @assert 0 < stride <= size(out, dim)
     ifirst = firstindex(out, dim)
     ilast = lastindex(out, dim)
-    r = ifirst+(stride-1):stride:ilast
-    slices(out, Dim, r) .= slices(inp, Dim, r)
-    for offset in 1:(stride-1)
-        r1 = r .- offset
-        r0 = r .- (offset -1)
-        slices(out, Dim, r1) .= f.(slices(inp, Dim, r1), slices(out, Dim, r0), )
-    end
+    starts = ifirst+(stride-1):stride:ilast
+    calc_bwd_inner!(f, out, inp, Dim, stride, starts)
     # boundary
-    if ilast == last(r)
+    if ilast == last(starts)
         return out
     end
     slices(out, Dim, ilast) .= slices(inp, Dim, ilast)
-    for i in (ilast-1):(-1):(last(r)+1)
+    for i in (ilast-1):(-1):(last(starts)+1)
         slices(out, Dim, i) .= f.(slices(inp, Dim, i), slices(out, Dim, i+1))
     end
     return out
@@ -410,8 +430,8 @@ end
             Dim, winaxis, OrderNLogK(), deadpool)
     end
     @argcheck 0 < stride <= size(out, dim)
-    calc_bwd!(f, bwd, inp, Dim, stride)
     calc_fwd!(f, fwd, inp, Dim, stride)
+    calc_bwd!(f, bwd, inp, Dim, stride)
 
     to_fwd = hi
     to_bwd = lo
