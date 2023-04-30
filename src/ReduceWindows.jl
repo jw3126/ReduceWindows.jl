@@ -261,4 +261,124 @@ function reduce_window_naive(f, arr::AbstractArray{T,N}, window) where {T,N}
     return out
 end
 
+################################################################################
+#### ON
+################################################################################
+
+function slices(arr::AbstractArray, Dim::Val{dim}, range) where {dim}
+    axs = Base.setindex(axes(arr), range, dim)
+    view(arr, axs...)
+end
+
+
+function calc_fwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
+    @assert axes(out) == axes(inp)
+    @assert 0 < stride <= size(out, dim)
+    ifirst = firstindex(out, dim)
+    ilast = lastindex(out, dim)
+    r = ifirst:stride:(ilast - (stride - 1))
+    slices(out, Dim, r) .= slices(inp, Dim, r)
+    for offset in 1:(stride-1)
+        r1 = r .+ offset
+        r0 = r .+ (offset -1)
+        slices(out, Dim, r1) .= f.(slices(out, Dim, r0), slices(inp, Dim, r1))
+    end
+    # boundary
+    if ilast == last(r) + (stride-1)
+        return out
+    end
+    i0 = last(r) + stride
+    slices(out, Dim, i0) .= slices(inp, Dim, i0)
+    for i in i0+1:ilast
+        slices(out, Dim, i) .= f.(slices(out, Dim, i-1), slices(inp, Dim, i))
+    end
+    return out
+end
+
+function calc_bwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
+    @assert axes(out) == axes(inp)
+    @assert 0 < stride <= size(out, dim)
+    ifirst = firstindex(out, dim)
+    ilast = lastindex(out, dim)
+    r = ifirst+(stride-1):stride:ilast
+    slices(out, Dim, r) .= slices(inp, Dim, r)
+    for offset in 1:(stride-1)
+        r1 = r .- offset
+        r0 = r .- (offset -1)
+        slices(out, Dim, r1) .= f.(slices(inp, Dim, r1), slices(out, Dim, r0), )
+
+    end
+    # boundary
+    if ilast == last(r)
+        return out
+    end
+    slices(out, Dim, ilast) .= slices(inp, Dim, ilast)
+    for i in (ilast-1):(-1):(last(r)+1)
+        slices(out, Dim, i) .= f.(slices(inp, Dim, i), slices(out, Dim, i+1))
+    end
+    return out
+end
+
+struct DeadPool{Tpl,Arr}
+    template::Tpl
+    dead::Vector{Arr}
+    function DeadPool(template)
+        dead = [similar(template)]
+        Arr = eltype(dead)
+        Tpl = typeof(template)
+        new{Tpl, Arr}(template, dead)
+    end
+end
+function alloc!(o::DeadPool)
+    if isempty(o.dead)
+        push!(o.dead, similar(o.template))
+    end
+    pop!(o.dead)
+end
+function free!(o::DeadPool, arr)
+    @assert axes(arr) == axes(o.template)
+    push!(o.dead, arr)
+    return o
+end
+
+function along_axis!(f::F, out, inp, 
+        Dim::Val{dim}, winaxis::AbstractUnitRange, deadpool) where {F,dim}
+    @assert axes(out) == axes(inp)
+    @assert 0 in winaxis
+    fwd = alloc!(deadpool)
+    bwd = alloc!(deadpool)
+    lo = first(winaxis)
+    hi = last(winaxis)
+    stride = hi - lo
+    calc_bwd!(f, bwd, inp, Dim, stride)
+    calc_fwd!(f, fwd, inp, Dim, stride)
+
+    to_fwd = hi
+    to_bwd = lo
+    ifirst = firstindex(out, dim)
+    ilast = lastindex(out, dim)
+    # boundary pre
+    r_pre = ifirst:ifirst-lo-1
+    slices(out, Dim, r_pre) .= slices(fwd, Dim, r_pre .+ to_fwd)
+    # boundary post
+    ilast_fwd = last(range(ifirst, step=stride, stop=ilast)) + stride - 1
+    for i in (ilast-hi+1):ilast
+        if i + to_fwd > ilast_fwd
+            slices(out, Dim, i) .= slices(bwd, Dim, i + to_bwd)
+        else
+            slices(out, Dim, i) .= f.(slices(bwd, Dim, i + to_bwd),
+                                       slices(fwd, Dim, ilast,))
+        end
+    end
+    # inner
+    r_inner = (ifirst-to_bwd):(ilast-to_fwd)
+    r_fwd = r_inner .+ to_fwd
+    r_bwd = r_inner .+ to_bwd
+    slices(out, Dim, r_inner) .= f.(slices(bwd, Dim, r_bwd), slices(fwd, Dim, r_fwd))
+    free!(deadpool, fwd)
+    free!(deadpool, bwd)
+    return out
+end
+
+
 end

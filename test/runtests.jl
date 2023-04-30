@@ -1,9 +1,76 @@
 using ReduceWindows: reduce_window, reduce_window_naive
+using ReduceWindows: along_axis!, calc_fwd!, calc_bwd!
 using ReduceWindows: fastmin, fastmax
 using ReduceWindows
 using Test
 using Random: Xoshiro
 using OffsetArrays
+
+function calc_fwd_free_monoid(;length, stride)
+    inp = [[i] for i in 1:length]
+    f = vcat
+    out = fill(Int[], length)
+    Dim = Val(1)
+    calc_fwd!(f, out, inp, Dim, stride)
+    return out
+end
+
+function calc_bwd_free_monoid(;length, stride)
+    inp = [[i] for i in 1:length]
+    f = vcat
+    out = fill(Int[], length)
+    Dim = Val(1)
+    calc_bwd!(f, out, inp, Dim, stride)
+    return out
+end
+
+function along_axis_free_monoid(; length, winaxis)
+    inp = [[i] for i in 1:length]
+    f = vcat
+    out = fill(Int[], length)
+    Dim = Val(1)
+    deadpool = DeadPool(inp)
+    along_axis!(f, out, inp, Dim, winaxis, deadpool)
+    return out
+end
+
+@testset "along_axis_free_monoid" begin
+    @test along_axis_free_monoid(; length = 5, winaxis = 0:1) == 
+        [[1, 2], [2, 3], [3, 4], [4, 5], [5]]
+    
+    @test along_axis_free_monoid(; length = 5, winaxis = 0:2) == 
+        [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5], [5]]
+    
+    @test along_axis_free_monoid(; length = 5, winaxis = -1:1) ==
+        [[1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4,5]]
+    
+    @test along_axis_free_monoid(; length = 5, winaxis = 0:1) == 
+        [[1, 2], [2, 3], [3, 4], [4, 5], [5]]
+    
+    @test along_axis_free_monoid(; length = 5, winaxis = -1:0) == 
+        [[1], [1, 2], [2, 3], [3, 4], [4, 5]]
+    
+    @test along_axis_free_monoid(; length = 5, winaxis = -2:0) == 
+        [[1], [1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5]]
+end
+
+@testset "calc_fwd!" begin
+    @test calc_fwd_free_monoid(;length=5, stride=1) == [[1], [2], [3], [4], [5]]
+    @test calc_fwd_free_monoid(;length=5, stride=2) == [[1], [1,2], [3], [3,4], [5]]
+    @test calc_fwd_free_monoid(;length=5, stride=3) == [[1], [1,2], [1,2,3], [4], [4,5]]
+    @test calc_fwd_free_monoid(;length=5, stride=4) == [[1], [1,2], [1,2,3], [1,2,3,4], [5,]]
+    @test calc_fwd_free_monoid(;length=5, stride=5) == [[1], [1,2], [1,2,3], [1,2,3,4], [1,2,3,4,5]]
+    
+end
+
+@testset "calc_bwd!" begin
+    @test calc_bwd_free_monoid(; length = 5, stride = 1) == [[1], [2], [3], [4], [5]]
+    @test calc_bwd_free_monoid(; length = 5, stride = 2) == [[1, 2], [2], [3, 4], [4], [5]]
+    @test calc_bwd_free_monoid(; length = 5, stride = 3) == [[1, 2, 3], [2, 3], [3], [4, 5], [5]]
+    @test calc_bwd_free_monoid(; length = 5, stride = 4) == [[1, 2, 3, 4], [2, 3, 4], [3, 4], [4], [5]]
+    @test calc_bwd_free_monoid(; length = 5, stride = 5) == [[1, 2, 3, 4, 5], [2, 3, 4, 5], [3, 4, 5], [4, 5], [5]] 
+end
+
 
 @testset "Digits" begin
     Digits = ReduceWindows.Digits
