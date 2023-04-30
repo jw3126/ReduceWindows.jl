@@ -9,6 +9,29 @@ end
 function fastmin(x,y)
     ifelse(x < y, x, y)
 end
+
+struct DeadPool{Tpl,Arr}
+    template::Tpl
+    dead::Vector{Arr}
+    function DeadPool(template)
+        dead = [similar(template)]
+        Arr = eltype(dead)
+        Tpl = typeof(template)
+        new{Tpl, Arr}(template, dead)
+    end
+end
+function alloc!(o::DeadPool)
+    if isempty(o.dead)
+        push!(o.dead, similar(o.template))
+    end
+    pop!(o.dead)
+end
+function free!(o::DeadPool, arr)
+    @assert axes(arr) == axes(o.template)
+    push!(o.dead, arr)
+    return o
+end
+
 Base.@propagate_inbounds function apply_offset(I::CartesianIndex, ::Val{dim}, offset) where {dim}
     t = Tuple(I)
     t2 = Base.setindex(t, t[dim]+offset, dim)
@@ -53,7 +76,7 @@ function axes_unitrange(arr::AbstractArray{T,N})::NTuple{N,UnitRange{Int}} where
 end
 
 unwrap(::Val{x}) where {x} = x
-function add_along_axis_prefix!(f::F, out, inp, Dim::Val, window)::typeof(out) where {F}
+function along_axis_prefix!(f::F, out, inp, Dim::Val, window)::typeof(out) where {F}
     dim = unwrap(Dim)
     # make sure the front elements of out along axis is correct
     winaxis = window[dim]
@@ -151,7 +174,7 @@ function power_stride!(f, out, inp, Dim::Val, offset)
     return out
 end
 
-@noinline function add_along_axis!(f::F, out, inp, Dim::Val, window, workspace) where {F}
+@noinline function along_axis!(f::F, out, inp, Dim::Val, window, alg::ONLogK, deadpool) where {F}
     dim = unwrap(Dim)
     winaxis = window[dim]
     lo = first(winaxis)
@@ -160,7 +183,8 @@ end
     digits_first = Digits((lo >= 0) ? 0 : hi+1)
     offset_inner = lo 
     offset_first = 0
-    (;winp, wout) = workspace
+    winp = alloc!(deadpool)
+    wout = alloc!(deadpool)
     copy!(wout, inp)
     out_inner_touched = false
     out_first_touched = false
@@ -197,9 +221,11 @@ end
         winp, wout = wout, winp
         power_stride!(f, wout, winp, Dim, 2^(iloglen-1))
     end
+    free!(deadpool, wout)
+    free!(deadpool, winp)
     # @assert out_first_touched
     @assert out_inner_touched
-    add_along_axis_prefix!(f, out, inp, Dim, window)
+    along_axis_prefix!(f, out, inp, Dim, window)
     return out
 end
 
@@ -216,6 +242,10 @@ function resolve_window(array_axes, window)
     map(shrink_window_axis,array_axes, window)
 end
 
+struct ON end
+struct ONLogK end
+struct ONK end
+
 """
 
     reduce_window(f, arr, window)
@@ -231,18 +261,20 @@ Time complexity is `O(log(k) * n)` where
 * `k` is the size of the window: `k = prod(length, window)`
 Note `reduce_window` assumes, that `f` is associative and commutative.
 """
-function reduce_window(f::F, arr, window) where {F}
+function reduce_window(f::F, arr, window, alg=ONLogK(); deadpool=DeadPool(arr)) where {F}
     win = resolve_window(axes(arr), window)
-    workspace = (;winp=similar(arr), wout=similar(arr))
-    out = similar(arr)
-    inp = copy!(similar(arr), arr)
+    _reduce_window(f, arr, win, alg, deadpool)
+end
+function _reduce_window(f, arr, window, alg, deadpool)
+    inp = arr
     for dim in 1:ndims(arr)
         Dim = Val(dim)
-        add_along_axis!(f, out, inp, Dim, win, workspace)
-        (inp, out) = (out, inp)
+        out = alloc!(deadpool)
+        along_axis!(f, out, inp, Dim, window, alg, deadpool)
+        (inp === arr) || free!(deadpool, inp)
+        inp = out
     end
-    (inp, out) = (out, inp)
-    return out
+    return inp
 end
 
 function reduce_window_naive(f, arr::AbstractArray{T,N}, window) where {T,N}
@@ -319,27 +351,6 @@ function calc_bwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
     return out
 end
 
-struct DeadPool{Tpl,Arr}
-    template::Tpl
-    dead::Vector{Arr}
-    function DeadPool(template)
-        dead = [similar(template)]
-        Arr = eltype(dead)
-        Tpl = typeof(template)
-        new{Tpl, Arr}(template, dead)
-    end
-end
-function alloc!(o::DeadPool)
-    if isempty(o.dead)
-        push!(o.dead, similar(o.template))
-    end
-    pop!(o.dead)
-end
-function free!(o::DeadPool, arr)
-    @assert axes(arr) == axes(o.template)
-    push!(o.dead, arr)
-    return o
-end
 
 function along_axis!(f::F, out, inp, 
         Dim::Val{dim}, winaxis::AbstractUnitRange, deadpool) where {F,dim}

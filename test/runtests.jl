@@ -1,5 +1,5 @@
 using ReduceWindows: reduce_window, reduce_window_naive
-using ReduceWindows: along_axis!, calc_fwd!, calc_bwd!
+using ReduceWindows: along_axis!, calc_fwd!, calc_bwd!, DeadPool
 using ReduceWindows: fastmin, fastmax
 using ReduceWindows
 using Test
