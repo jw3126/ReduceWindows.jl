@@ -1,7 +1,7 @@
 module RunTests
 using ReduceWindows: reduce_window, reduce_window_naive
 using ReduceWindows: along_axis!, calc_fwd!, calc_bwd!, DeadPool
-using ReduceWindows: OrderN, OrderNK, OrderNLogK
+using ReduceWindows: OrderN, OrderNK, OrderNLogK, MixedOrderN_OrderNLogK
 using ReduceWindows: fastmin, fastmax
 using ReduceWindows
 using Test
@@ -155,7 +155,7 @@ end
     end
 end
 
-ALGS = [OrderN(), OrderNK(), OrderNLogK()]
+ALGS = [OrderN(), OrderNK(), OrderNLogK(), MixedOrderN_OrderNLogK()]
 @testset "1d explicit $alg" for alg in ALGS
     @test reduce_window(+, 1:4, (-2:1,), alg) == [3, 6, 10, 9]
     @test reduce_window(+, [1], (-1:0,), alg) == [1]

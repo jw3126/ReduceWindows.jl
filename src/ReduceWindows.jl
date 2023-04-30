@@ -6,6 +6,7 @@ using ArgCheck
 struct OrderN end
 struct OrderNLogK end
 struct OrderNK end
+struct MixedOrderN_OrderNLogK end
 
 function fastmax(x,y)
     ifelse(x < y, y, x)
@@ -261,7 +262,7 @@ Time complexity is `O(log(k) * n)` where
 * `k` is the size of the window: `k = prod(length, window)`
 Note `reduce_window` assumes, that `f` is associative and commutative.
 """
-function reduce_window(f::F, arr::AbstractArray, window, alg=OrderNLogK(); deadpool=DeadPool(arr)) where {F}
+function reduce_window(f::F, arr::AbstractArray, window, alg=MixedOrderN_OrderNLogK(); deadpool=DeadPool(arr)) where {F}
     win = resolve_window(axes(arr), window)
     _reduce_window(f, arr, win, alg, deadpool)
 end
@@ -318,24 +319,43 @@ function slices(arr::AbstractArray, Dim::Val{dim}, range) where {dim}
     view(arr, axs...)
 end
 
+function calc_fwd_inner!(f::F, out, inp, Dim::Val{dim}, stride, starts::AbstractRange) where {F,dim}
+    slices(out, Dim, starts) .= slices(inp, Dim, starts)
+    for offset in 1:(stride-1)
+        r1 = starts .+ offset
+        r0 = starts .+ (offset -1)
+        slices(out, Dim, r1) .= f.(slices(out, Dim, r0), slices(inp, Dim, r1))
+    end
+    return out
+end
+
+function calc_fwd_inner!(f::F, out, inp, Dim::Val{1}, stride, starts::AbstractRange) where {F}
+    @inbounds for ci_rest in CartesianIndices(Base.tail(axes(inp)))
+        i_rest = Tuple(ci_rest)
+        for start in starts
+            out[start, i_rest...] = inp[start, i_rest...]
+            for offset in 1:(stride-1)
+                i1 = start + offset
+                i0 = start + (offset -1)
+                out[i1, i_rest...] = f(out[i0, i_rest...], inp[i1, i_rest...])
+            end
+        end
+    end
+    return out
+end
 
 function calc_fwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
     @assert axes(out) == axes(inp)
     @assert 0 < stride <= size(out, dim)
     ifirst = firstindex(out, dim)
     ilast = lastindex(out, dim)
-    r = ifirst:stride:(ilast - (stride - 1))
-    slices(out, Dim, r) .= slices(inp, Dim, r)
-    for offset in 1:(stride-1)
-        r1 = r .+ offset
-        r0 = r .+ (offset -1)
-        slices(out, Dim, r1) .= f.(slices(out, Dim, r0), slices(inp, Dim, r1))
-    end
+    starts = ifirst:stride:(ilast - (stride - 1))
+    calc_fwd_inner!(f, out, inp, Dim, stride, starts)
     # boundary
-    if ilast == last(r) + (stride-1)
+    if ilast == last(starts) + (stride-1)
         return out
     end
-    i0 = last(r) + stride
+    i0 = last(starts) + stride
     slices(out, Dim, i0) .= slices(inp, Dim, i0)
     for i in i0+1:ilast
         slices(out, Dim, i) .= f.(slices(out, Dim, i-1), slices(inp, Dim, i))
@@ -366,6 +386,14 @@ function calc_bwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
     return out
 end
 
+@noinline function along_axis!(f::F, out::AbstractArray, inp::AbstractArray, 
+        Dim::Val{1}, winaxis::AbstractUnitRange, ::MixedOrderN_OrderNLogK, deadpool::DeadPool) where {F}
+    along_axis!(f, out, inp, Dim, winaxis, OrderNLogK(), deadpool)
+end
+@noinline function along_axis!(f::F, out::AbstractArray, inp::AbstractArray, 
+        Dim::Val{dim}, winaxis::AbstractUnitRange, ::MixedOrderN_OrderNLogK, deadpool::DeadPool) where {F, dim}
+    along_axis!(f, out, inp, Dim, winaxis, OrderN(), deadpool)
+end
 
 @noinline function along_axis!(f::F, out::AbstractArray, inp::AbstractArray, 
         Dim::Val{dim}, winaxis::AbstractUnitRange, ::OrderN, deadpool::DeadPool) where {F,dim}
