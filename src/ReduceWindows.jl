@@ -3,6 +3,10 @@ export reduce_window
 
 using ArgCheck
 
+struct OrderN end
+struct OrderNLogK end
+struct OrderNK end
+
 function fastmax(x,y)
     ifelse(x < y, y, x)
 end
@@ -173,7 +177,7 @@ function power_stride!(f, out, inp, Dim::Val, offset)
     return out
 end
 
-@noinline function along_axis!(f::F, out, inp, Dim::Val, winaxis, alg::ONLogK, deadpool) where {F}
+@noinline function along_axis!(f::F, out, inp, Dim::Val, winaxis, alg::OrderNLogK, deadpool) where {F}
     dim = unwrap(Dim)
     lo = first(winaxis)
     hi = last(winaxis)
@@ -240,9 +244,6 @@ function resolve_window(array_axes, window)
     map(shrink_window_axis,array_axes, window)
 end
 
-struct ON end
-struct ONLogK end
-struct ONK end
 
 """
 
@@ -259,18 +260,34 @@ Time complexity is `O(log(k) * n)` where
 * `k` is the size of the window: `k = prod(length, window)`
 Note `reduce_window` assumes, that `f` is associative and commutative.
 """
-function reduce_window(f::F, arr, window, alg=ONLogK(); deadpool=DeadPool(arr)) where {F}
+function reduce_window(f::F, arr::AbstractArray, window, alg=OrderN(); deadpool=DeadPool(arr)) where {F}
     win = resolve_window(axes(arr), window)
     _reduce_window(f, arr, win, alg, deadpool)
 end
+function reduce_window(f::F, arr::AbstractArray, window, alg::OrderNK; deadpool=nothing) where {F}
+    win = resolve_window(axes(arr), window)
+    reduce_window_naive(f, arr, win)
+end
 function _reduce_window(f, arr, window, alg, deadpool)
-    inp = arr
+    Arr = eltype(deadpool.dead)
+    local inp::Arr
+    if arr isa Arr
+        inp = arr
+    else
+        inp = alloc!(deadpool)
+        copy!(inp, arr)
+    end
     for dim in 1:ndims(arr)
         Dim = Val(dim)
-        out = alloc!(deadpool)
-        along_axis!(f, out, inp, Dim, window[dim], alg, deadpool)
-        (inp === arr) || free!(deadpool, inp)
-        inp = out
+        winaxis = window[dim]
+        if length(winaxis) > 1
+            out = alloc!(deadpool)
+            along_axis!(f, out, inp, Dim, winaxis, alg, deadpool)
+            (inp === arr) || free!(deadpool, inp)
+            inp = out
+        else
+            @assert winaxis == 0:0
+        end
     end
     return inp
 end
@@ -292,7 +309,7 @@ function reduce_window_naive(f, arr::AbstractArray{T,N}, window) where {T,N}
 end
 
 ################################################################################
-#### ON
+#### OrderN
 ################################################################################
 
 function slices(arr::AbstractArray, Dim::Val{dim}, range) where {dim}
@@ -336,7 +353,6 @@ function calc_bwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
         r1 = r .- offset
         r0 = r .- (offset -1)
         slices(out, Dim, r1) .= f.(slices(inp, Dim, r1), slices(out, Dim, r0), )
-
     end
     # boundary
     if ilast == last(r)
@@ -350,8 +366,8 @@ function calc_bwd!(f::F, out, inp, Dim::Val{dim}, stride) where {F,dim}
 end
 
 
-function along_axis!(f::F, out, inp, 
-        Dim::Val{dim}, winaxis::AbstractUnitRange, ::ON, deadpool) where {F,dim}
+@noinline function along_axis!(f::F, out::AbstractArray, inp::AbstractArray, 
+        Dim::Val{dim}, winaxis::AbstractUnitRange, ::OrderN, deadpool::DeadPool) where {F,dim}
     @assert axes(out) == axes(inp)
     @assert 0 in winaxis
     fwd = alloc!(deadpool)
@@ -359,6 +375,12 @@ function along_axis!(f::F, out, inp,
     lo = first(winaxis)
     hi = last(winaxis)
     stride = hi - lo
+    if stride > size(out, dim)
+        # TODO handle this case in O(N)
+        return along_axis!(f, out, inp,
+            Dim, winaxis, OrderNLogK(), deadpool)
+    end
+    @argcheck 0 < stride <= size(out, dim)
     calc_bwd!(f, bwd, inp, Dim, stride)
     calc_fwd!(f, fwd, inp, Dim, stride)
 

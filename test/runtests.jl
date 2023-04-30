@@ -1,6 +1,7 @@
+module RunTests
 using ReduceWindows: reduce_window, reduce_window_naive
 using ReduceWindows: along_axis!, calc_fwd!, calc_bwd!, DeadPool
-using ReduceWindows: ON, ONK, ONLogK
+using ReduceWindows: OrderN, OrderNK, OrderNLogK
 using ReduceWindows: fastmin, fastmax
 using ReduceWindows
 using Test
@@ -25,7 +26,7 @@ function calc_bwd_free_monoid(;length, stride)
     return out
 end
 
-function along_axis_free_monoid(; length, winaxis, alg=ON())
+function along_axis_free_monoid(; length, winaxis, alg=OrderN())
     inp = [[i] for i in 1:length]
     f = vcat
     out = fill(Int[], length)
@@ -109,74 +110,46 @@ end
     end
 end
 
-@testset "1d explicit" begin
-    @test reduce_window(+, 1:4, (-2:1,)) == [3, 6, 10, 9]
-    @test reduce_window_naive(+, 1:4, (-2:1,)) == [3, 6, 10, 9]
-
-    @test reduce_window(+, [1], (-1:0,)) == [1]
-    @test reduce_window_naive(+, [1], (-1:0,)) == [1]
-
-    @test reduce_window(+, [1], (-9:1,)) == [1]
-    @test reduce_window_naive(+, [1], (-9:1,)) == [1]
-
-    @test reduce_window(+, Float64[], (-2:1,)) == Float64[]
-    @test reduce_window_naive(+, Float64[], (-2:1,)) == Float64[]
-
-
-    @test reduce_window(+, [1,3,4], (0:0,)) ≈ [1,3,4]
-    @test reduce_window_naive(+, [1,3,4], (0:0,)) ≈ [1,3,4]
-
-    @test reduce_window(+, [1,3,4], (-1:1,)) ≈ [4, 8, 7]
-    @test reduce_window_naive(+, [1,3,4], (-1:1,)) ≈ [4, 8, 7]
-
-    @test reduce_window(+, [1,2], (0:4,)) ≈ [3,2]
-    @test reduce_window_naive(+, [1,2], (0:4,)) ≈ [3,2]
-
-    @test reduce_window(max, [1,3,4], (-1:3,)) == [4,4,4]
-    @test reduce_window_naive(max, [1,3,4], (-1:3,)) == [4,4,4]
-
-    @test reduce_window(min, [5,3,4,1], (-10:0,)) == [5, 3, 3, 1]
-    @test reduce_window_naive(min, [5,3,4,1], (-10:0,)) == [5, 3, 3, 1]
-
-    @test reduce_window(min, [5,3,4,1], (-10:10,)) == [1,1,1,1]
-    @test reduce_window_naive(min, [5,3,4,1], (-10:10,)) == [1,1,1,1]
-
-    @test reduce_window(+, OffsetArray([1,2,3,4],-2:1), (-2:1,)) == OffsetArray([3, 6, 10, 9], -2:1)
-    @test reduce_window_naive(+, OffsetArray([1,2,3,4],-2:1), (-2:1,)) == OffsetArray([3, 6, 10, 9], -2:1)
+ALGS = [OrderN(), OrderNK(), OrderNLogK()]
+@testset "1d explicit $alg" for alg in ALGS
+    @test reduce_window(+, 1:4, (-2:1,), alg) == [3, 6, 10, 9]
+    @test reduce_window(+, [1], (-1:0,), alg) == [1]
+    @test reduce_window(+, [1], (-9:1,), alg) == [1]
+    @test reduce_window(+, Float64[], (-2:1,), alg) == Float64[]
+    @test reduce_window(+, [1,3,4], (0:0,), alg) ≈ [1,3,4]
+    @test reduce_window(+, [1,3,4], (-1:1,), alg) ≈ [4, 8, 7]
+    @test reduce_window(+, [1,2], (0:4,), alg) ≈ [3,2]
+    @test reduce_window(max, [1,3,4], (-1:3,), alg) == [4,4,4]
+    @test reduce_window(min, [5,3,4,1], (-10:0,), alg) == [5, 3, 3, 1]
+    @test reduce_window(min, [5,3,4,1], (-10:10,), alg) == [1,1,1,1]
+    @test reduce_window(+, OffsetArray([1,2,3,4],-2:1), (-2:1,), alg) == OffsetArray([3, 6, 10, 9], -2:1)
 end
 
-@testset "2d explicit" begin
-    @test reduce_window(+, [1 2; 3 4], (0:0,0:0)) == [1 2; 3 4]
-    @test reduce_window_naive(+, [1 2; 3 4], (0:0,0:0)) == [1 2; 3 4]
-
-    @test reduce_window(+, [1 2; 3 4], (0:1,0:0)) == [4 6; 3 4]
-    @test reduce_window_naive(+, [1 2; 3 4], (0:1,0:0)) == [4 6; 3 4]
-
-    @test reduce_window(+, [1 2; 3 4], (0:0,0:1)) == [3 2; 7 4]
-    @test reduce_window_naive(+, [1 2; 3 4], (0:0,0:1)) == [3 2; 7 4]
-
-    @test reduce_window(+, [1 2; 3 4], (0:1,0:1)) == [10 6; 7 4]
-    @test reduce_window_naive(+, [1 2; 3 4], (0:1,0:1)) == [10 6; 7 4]
-
-    @test reduce_window(+, [1 2; 3 4], (-10:11,-12:13)) == [10 10; 10 10]
-    @test reduce_window_naive(+, [1 2; 3 4], (-10:11,-12:13)) == [10 10; 10 10]
+@testset "2d explicit $alg" for alg in ALGS
+    @test reduce_window(+, [1 2; 3 4], (0:0,0:0)      , alg) == [1 2; 3 4]
+    @test reduce_window(+, [1 2; 3 4], (0:1,0:0)      , alg) == [4 6; 3 4]
+    @test reduce_window(+, [1 2; 3 4], (0:0,0:1)      , alg) == [3 2; 7 4]
+    @test reduce_window(+, [1 2; 3 4], (0:1,0:1)      , alg) == [10 6; 7 4]
+    @test reduce_window(+, [1 2; 3 4], (-10:11,-12:13), alg) == [10 10; 10 10]
 end
 
 @testset "1d fuzz" begin
     rng = Xoshiro(1786867373)
     for _ in 1:1000
+        alg = rand(rng, ALGS)
         lo = rand(rng, -100:0)
         hi = rand(rng, 0:100)
         win = (lo:hi,)
         len = rand(rng, 0:200)
         arr = randn(rng, len)
-        @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
+        @test reduce_window(+, arr, win, alg) ≈ reduce_window_naive(+, arr, win)
     end
 end
 
 @testset "2d fuzz" begin
     rng = Xoshiro(2379087392)
     for _ in 1:1000
+        alg = rand(rng, ALGS)
         win = ntuple(2) do _
             lo = rand(rng, -10:0)
             hi = rand(rng, 0:10)
@@ -184,19 +157,23 @@ end
         end
         siz = rand(rng, 0:20, 2)
         arr = randn(rng, siz...)
-        @test reduce_window(+, arr, win) ≈ reduce_window_naive(+, arr, win)
+        @test reduce_window(+, arr, win, alg) ≈ reduce_window_naive(+, arr, win)
     end
 end
 
 @testset "eltype" begin
     @test typeof(@inferred reduce_window(+, 1:4, (-2:1,))) == Vector{Int}
     @test typeof(@inferred reduce_window(max, Float32[1,2], (-2:1,))) == Vector{Float32}
+    for alg in ALGS
+        @test typeof(@inferred reduce_window(+, 1:4, (-2:1,), alg)) == Vector{Int}
+    end
 end
 
 @testset "nd fuzz" begin
     rng = Xoshiro(1436607836)
     myadd(x,y) = x + y
     for _ in 1:100
+        alg = rand(rng, ALGS)
         nd = rand(rng, 1:5)
         win = ntuple(nd) do _
             lo = rand(rng, -4:0)
@@ -223,3 +200,5 @@ end
 # arr = randn(Xoshiro(1), 10, 11)
 # JET.@test_opt target_modules=(ReduceWindows,) reduce_window(+,arr, (-2:2,-4:3))
 # end
+#
+end # module
