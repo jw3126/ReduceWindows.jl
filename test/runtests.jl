@@ -36,6 +36,42 @@ function along_axis_free_monoid(; length, winaxis, alg=OrderN())
     return out
 end
 
+mutable struct OpCount{F}
+    op::F
+    count::Int
+    function OpCount(f)
+        new{typeof(f)}(f, 0)
+    end
+end
+function (o::OpCount)(x,y)
+    o.count += 1
+    o.op(x,y)
+end
+
+function count_ops(op, x, window, alg)
+    c = OpCount(op)
+    reduce_window(c, x, window, alg)
+    c.count
+end
+
+@testset "complexity" begin
+    rng = Xoshiro(43949543)
+    x = randn(rng, 100, 100)
+    window1 = (-10:10, -10:10)
+    window2 = (-20:20, -20:20)
+    N = length(x)
+    K1 = prod(length, window1)
+    K2 = prod(length, window1)
+    @test count_ops(+, x, window1, OrderN()) < 6*N
+    @test count_ops(+, x, window2, OrderN()) < 6*N
+
+    @test 6*N < count_ops(+, x, window1, OrderNLogK()) < 6*N*log(K1)
+    @test 6*N < count_ops(+, x, window2, OrderNLogK()) < 6*N*log(K2)
+
+    @test 6*N*log(K1) < count_ops(+, x, window1, OrderNK()) < 4*K1*N
+    @test 6*N*log(K2) < count_ops(+, x, window2, OrderNK()) < 4*K2*N
+end
+
 @testset "along_axis_free_monoid" begin
     @test along_axis_free_monoid(; length = 5, winaxis = 0:1) == 
         [[1, 2], [2, 3], [3, 4], [4, 5], [5]]
@@ -194,6 +230,7 @@ end
         @test reduce_window(+, oarr, win) ≈ reduce_window_naive(+, oarr, win)
     end
 end
+
 
 # import JET
 # @testset "JET" begin
