@@ -17,8 +17,9 @@ end
 struct DeadPool{Tpl,Arr}
     template::Tpl
     dead::Vector{Arr}
-    function DeadPool(template)
-        dead = [similar(template)]
+    function DeadPool(template; ndead=0)
+        @argcheck ndead >= 0
+        dead = [similar(template) for _ in 1:ndead]
         Arr = eltype(dead)
         Tpl = typeof(template)
         new{Tpl, Arr}(template, dead)
@@ -260,7 +261,7 @@ Time complexity is `O(log(k) * n)` where
 * `k` is the size of the window: `k = prod(length, window)`
 Note `reduce_window` assumes, that `f` is associative and commutative.
 """
-function reduce_window(f::F, arr::AbstractArray, window, alg=OrderN(); deadpool=DeadPool(arr)) where {F}
+function reduce_window(f::F, arr::AbstractArray, window, alg=OrderNLogK(); deadpool=DeadPool(arr)) where {F}
     win = resolve_window(axes(arr), window)
     _reduce_window(f, arr, win, alg, deadpool)
 end

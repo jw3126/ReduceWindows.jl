@@ -53,20 +53,29 @@ function count_ops(op, x, window, alg)
     reduce_window(c, x, window, alg)
     c.count
 end
+@testset "DeadPool" begin
+    @inferred DeadPool(1:10)
+    @inferred DeadPool(randn(2,2))
+
+end
 
 @testset "complexity" begin
     rng = Xoshiro(43949543)
     x = randn(rng, 100, 100)
     window1 = (-10:10, -10:10)
     window2 = (-20:20, -20:20)
+    window3 = (-30:30, -30:30)
     N = length(x)
     K1 = prod(length, window1)
-    K2 = prod(length, window1)
-    @test count_ops(+, x, window1, OrderN()) < 6*N
-    @test count_ops(+, x, window2, OrderN()) < 6*N
+    K2 = prod(length, window2)
+    K3 = prod(length, window2)
+    @test N < count_ops(+, x, window1, OrderN()) < 6*N
+    @test N < count_ops(+, x, window2, OrderN()) < 6*N
+    @test N < count_ops(+, x, window3, OrderN()) < 6*N
 
     @test 6*N < count_ops(+, x, window1, OrderNLogK()) < 6*N*log(K1)
     @test 6*N < count_ops(+, x, window2, OrderNLogK()) < 6*N*log(K2)
+    @test 6*N < count_ops(+, x, window3, OrderNLogK()) < 6*N*log(K3)
 
     @test 6*N*log(K1) < count_ops(+, x, window1, OrderNK()) < 4*K1*N
     @test 6*N*log(K2) < count_ops(+, x, window2, OrderNK()) < 4*K2*N
