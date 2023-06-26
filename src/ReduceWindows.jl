@@ -373,7 +373,7 @@ function calc_bwd_inner!(f::F, out, inp, Dim::Val{dim}, stride, starts::Abstract
     return out
 end
 
-function calc_bwd_inner!(f::F, out, inp, Dim::Val{1}, stride, starts::AbstractRange) where {F,dim}
+function calc_bwd_inner!(f::F, out, inp, Dim::Val{1}, stride, starts::AbstractRange) where {F}
     @inbounds for ci_rest in CartesianIndices(Base.tail(axes(inp)))
         i_rest = Tuple(ci_rest)
         for start in starts
